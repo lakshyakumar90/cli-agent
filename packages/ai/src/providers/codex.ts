@@ -24,20 +24,54 @@ export const CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex";
 export const CODEX_ORIGINATOR = "codex_cli_rs";
 
 /**
- * Wire ids Codex currently serves. Context windows come from the CLI's own
- * fallback metadata; pricing is subscription-based, so it is left unset (the
- * model table in @cli-agent/core can add it if a budget needs one).
+ * Wire ids Codex currently serves, with the context windows the Codex CLI
+ * reports for them.
+ *
+ * The backend refuses models that are not in this set for a ChatGPT account
+ * (`"The 'gpt-5.5' model is not supported when using Codex with a ChatGPT
+ * account"`), so the table is the list of models a subscription login can
+ * actually use. Pricing is subscription-based, so it is left unset.
  */
 const CODEX_MODELS: Record<string, Partial<ModelInfo>> = {
-  "gpt-5.5": {
-    name: "GPT-5.5 (Codex)",
-    contextWindow: 272_000,
-    supports: { tools: true, reasoning: true },
+  "gpt-6.1-sol": {
+    name: "GPT-6.1 Sol",
+    contextWindow: 500_000,
+    supports: { tools: true, vision: true, reasoning: true },
   },
-  "gpt-5.5-codex": {
-    name: "GPT-5.5 Codex",
+  "gpt-6.1-terra": {
+    name: "GPT-6.1 Terra",
+    contextWindow: 500_000,
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-6-astra": {
+    name: "GPT-6 Astra",
     contextWindow: 272_000,
-    supports: { tools: true, reasoning: true },
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-6-sol": {
+    name: "GPT-6 Sol",
+    contextWindow: 272_000,
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-6-luna": {
+    name: "GPT-6 Luna",
+    contextWindow: 272_000,
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-5.6-sol": {
+    name: "GPT-5.6 Sol",
+    contextWindow: 272_000,
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-5.6-terra": {
+    name: "GPT-5.6 Terra",
+    contextWindow: 272_000,
+    supports: { tools: true, vision: true, reasoning: true },
+  },
+  "gpt-5.6-luna": {
+    name: "GPT-5.6 Luna",
+    contextWindow: 272_000,
+    supports: { tools: true, vision: true, reasoning: true },
   },
 };
 

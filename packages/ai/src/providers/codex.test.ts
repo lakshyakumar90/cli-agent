@@ -139,22 +139,28 @@ describe("codex preset", () => {
     const models = await provider.models();
     const ids = models.map((model) => model.id);
 
-    expect(ids).toContain("gpt-5.5");
+    expect(ids).toContain("gpt-6.1-sol");
+    expect(ids).toContain("gpt-6-astra");
     expect(models.every((model) => model.provider === "codex")).toBe(true);
-    expect(models.every((model) => model.contextWindow === 272_000)).toBe(true);
+
+    // The Codex CLI reports these context windows for its models.
+    const sol = models.find((model) => model.id === "gpt-6.1-sol");
+    const astra = models.find((model) => model.id === "gpt-6-astra");
+    expect(sol?.contextWindow).toBe(500_000);
+    expect(astra?.contextWindow).toBe(272_000);
   });
 
   it("merges caller-supplied model metadata over the built-in table", async () => {
     const { provider } = makeProvider();
 
     const models = await codex({
-      modelInfo: { "gpt-5.5": { name: "Renamed" } },
+      modelInfo: { "gpt-6.1-sol": { name: "Renamed" } },
     }).models();
 
-    const model = models.find((entry) => entry.id === "gpt-5.5");
+    const model = models.find((entry) => entry.id === "gpt-6.1-sol");
     expect(model?.name).toBe("Renamed");
     // The rest of the built-in entry survives the merge.
-    expect(model?.contextWindow).toBe(272_000);
+    expect(model?.contextWindow).toBe(500_000);
     expect(models.every((entry) => entry.provider === "codex")).toBe(true);
   });
 });
