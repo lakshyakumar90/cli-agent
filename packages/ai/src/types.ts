@@ -42,6 +42,33 @@ export interface ToolSpec {
   schema: JSONSchema;
 }
 
+/** USD per 1M tokens. */
+export interface ModelPricing {
+  input: number;
+  output: number;
+  /** Prompt-cache reads. Falls back to the input rate when unknown. */
+  cacheRead?: number;
+  /** Prompt-cache writes. Falls back to the input rate when unknown. */
+  cacheWrite?: number;
+}
+
+/**
+ * A price that applies to some requests only: a long-context rate, or a
+ * promotional price that ends on a date.
+ *
+ * Tiers are matched in order — the first one that fits wins — so put the
+ * narrowest tier first.
+ */
+export interface PricingTier {
+  /** Applies when the request's input is at most this many tokens. */
+  maxInputTokens?: number;
+  /** Applies from this date (inclusive), `YYYY-MM-DD`. */
+  from?: string;
+  /** Applies until this date (inclusive), `YYYY-MM-DD`. */
+  until?: string;
+  pricing: ModelPricing;
+}
+
 /** Model metadata, used by the registry, the model picker and Phase 5 budgets. */
 export interface ModelInfo {
   /** Wire id sent to the provider, e.g. "claude-sonnet-4-5". */
@@ -54,8 +81,21 @@ export interface ModelInfo {
   contextWindow?: number;
   maxOutputTokens?: number;
   /** USD per 1M tokens. */
-  pricing?: { input: number; output: number };
+  pricing?: ModelPricing;
+  /** Prices that apply to some requests only (long context, promotions). */
+  pricingTiers?: PricingTier[];
   supports?: { tools?: boolean; vision?: boolean; reasoning?: boolean };
+  /**
+   * How the provider counts cached tokens in `Usage.inputTokens`:
+   * - `"included"` (default): the prompt total, with the cache counts as
+   *   subsets of it — OpenAI, Gemini and Codex report it this way;
+   * - `"excluded"`: only uncached input — Anthropic reports it this way.
+   */
+  cachedTokens?: "included" | "excluded";
+  /** The vendor has deprecated the model; it may be removed without notice. */
+  deprecated?: boolean;
+  /** Free-form note, e.g. a promotional price that ends on a date. */
+  note?: string;
 }
 
 /** One piece of an assistant turn. */
