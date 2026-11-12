@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "demo:loop": "tsx scripts/demo-loop.ts",
+    "demo:consumers": "tsx scripts/demo-consumers.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
