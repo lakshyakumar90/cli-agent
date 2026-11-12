@@ -8,3 +8,4 @@ export * from "./providers/codex.js";
 export * from "./providers/anthropic.js";
 export * from "./providers/gemini.js";
 export * from "./providers/antigravity.js";
+export * from "./auth/index.js";
