@@ -50,7 +50,8 @@ export interface ModelInfo {
   provider: string;
   /** Human label for the model picker. */
   name?: string;
-  contextWindow: number;
+  /** Context window in tokens. Optional: many OpenAI-compatible servers advertise only ids. */
+  contextWindow?: number;
   maxOutputTokens?: number;
   /** USD per 1M tokens. */
   pricing?: { input: number; output: number };
