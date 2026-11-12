@@ -4,6 +4,16 @@
  * model -> tool calls -> results -> model, until the model stops asking for
  * tools. The loop yields events and never prints, so the CLI, a JSON mode and
  * a sub-agent all consume the same stream.
+ *
+ * Three guards keep a runaway agent in check:
+ * - a limit on the turns of one prompt;
+ * - a detector for the model asking for the same thing over and over;
+ * - an abort path (Esc) that stops the stream and the running tools, and
+ *   leaves the transcript valid by answering every call that was made.
+ *
+ * A provider call that fails with 429 or 5xx is retried with a backoff, but
+ * only while nothing has happened yet: once a tool has run, the side effects
+ * are real and the model must not be asked again.
  */
 
 import type {
@@ -13,19 +23,26 @@ import type {
   Usage,
 } from "@cli-agent/ai";
 import { buildContext, type Context } from "./context.js";
-import type {
-  AgentEvent,
-  AgentState,
-  AssistantTurn,
-  ToolResultMsg,
+import { isAbort, isRetryNotice, withRetry } from "./retry.js";
+import {
+  DEFAULT_LIMITS,
+  type AgentEvent,
+  type AgentLimits,
+  type AgentState,
+  type AssistantTurn,
+  type LoopEnd,
+  type ToolResultMsg,
 } from "./types.js";
+
+/** What goes into the transcript for a call that was never run. */
+export const INTERRUPTED = "[interrupted]";
 
 /**
  * Run one prompt to completion.
  *
  * The conversation grows in `state.messages`; the caller reads the events as
  * they arrive. The generator returns when the model answers without asking
- * for another tool.
+ * for another tool, or when one of the guards stops it.
  */
 export async function* run(
   state: AgentState,
@@ -34,24 +51,91 @@ export async function* run(
 ): AsyncGenerator<AgentEvent> {
   state.messages.push({ role: "user", content: input });
 
+  const limits: Required<AgentLimits> = {
+    ...DEFAULT_LIMITS,
+    ...state.limits,
+  };
+
+  // How often each distinct call has been asked for in this prompt.
+  const seen = new Map<string, number>();
+
   let turns = 0;
+  let toolsExecuted = 0;
   let stop: StopReason = "end";
   let usage: Usage = { inputTokens: 0, outputTokens: 0 };
+  // Calls of the last turn that have no answer yet.
+  let unanswered: ToolCall[] = [];
+
+  /** End the loop, answering any call that is still open. */
+  function* finish(reason: LoopEnd): Generator<AgentEvent> {
+    if (unanswered.length > 0) {
+      const results = unanswered.map((call) => notRun(call, reason));
+      state.messages.push(...results);
+      for (const [index, call] of unanswered.entries()) {
+        const result = results[index];
+        if (result === undefined) continue;
+        yield {
+          t: "toolEnd",
+          call,
+          output: result.content,
+          isError: true,
+        };
+      }
+      unanswered = [];
+    }
+    yield { t: "done", stop, turns, usage, reason };
+  }
 
   while (true) {
+    if (signal.aborted) {
+      yield* finish("aborted");
+      return;
+    }
+    if (turns >= limits.maxTurns) {
+      yield* finish("max-turns");
+      return;
+    }
+
     const ctx: Context = buildContext(state);
     const turn: AssistantTurn = { role: "assistant", content: [] };
     turns += 1;
+    let aborted = false;
 
-    for await (const event of state.provider.stream({ ...ctx, signal })) {
-      if (event.t === "done") {
-        stop = event.stop;
-        usage = event.usage;
-        turn.usage = event.usage;
-        continue;
+    try {
+      const events = withRetry(
+        () => state.provider.stream({ ...ctx, signal }),
+        {
+          maxRetries: limits.maxRetries,
+          baseDelayMs: limits.retryDelayMs,
+          maxDelayMs: limits.maxRetryDelayMs,
+          // Once a tool has run, asking the model again could run it twice.
+          canRetry: () => toolsExecuted === 0,
+          signal,
+        },
+      );
+
+      for await (const item of events) {
+        if (isRetryNotice(item)) {
+          yield item;
+          continue;
+        }
+        if (item.t === "done") {
+          stop = item.stop;
+          usage = item.usage;
+          turn.usage = item.usage;
+          continue;
+        }
+        const emitted = accumulate(turn, item);
+        if (emitted !== undefined) yield emitted;
       }
-      const emitted = accumulate(turn, event);
-      if (emitted !== undefined) yield emitted;
+    } catch (error) {
+      if (!isAbort(error, signal)) {
+        // The turn is kept: the caller saw its text, so the transcript has
+        // to match. The failure itself is the caller's problem.
+        state.messages.push(turn);
+        throw error;
+      }
+      aborted = true;
     }
 
     state.messages.push(turn);
@@ -59,18 +143,37 @@ export async function* run(
     const calls = turn.content.filter(
       (block): block is ToolCall => block.type === "toolCall",
     );
+    unanswered = calls;
 
-    // The model is finished.
-    if (calls.length === 0) {
-      yield { t: "done", stop, turns, usage };
+    if (aborted) {
+      yield* finish("aborted");
       return;
     }
 
-    // The tools run together; their results go back in the order the model
-    // asked for them.
+    // The model is finished.
+    if (calls.length === 0) {
+      yield* finish(stop === "length" ? "length" : "end");
+      return;
+    }
+
+    // The same call over and over means the model is stuck.
+    const repeated = calls.find((call) => {
+      const signature = callSignature(call);
+      const count = (seen.get(signature) ?? 0) + 1;
+      seen.set(signature, count);
+      return count > limits.maxRepeatedCalls;
+    });
+    if (repeated !== undefined) {
+      yield* finish("repeated-call");
+      return;
+    }
+
+    // The tools of one turn run together; their results go back in the order
+    // the model asked for them.
     const results = await Promise.all(
       calls.map((call) => execTool(call, state, signal)),
     );
+    toolsExecuted += calls.length;
 
     for (const [index, call] of calls.entries()) {
       const result = results[index];
@@ -84,6 +187,12 @@ export async function* run(
     }
 
     state.messages.push(...results);
+    unanswered = [];
+
+    if (signal.aborted) {
+      yield* finish("aborted");
+      return;
+    }
   }
 }
 
@@ -135,7 +244,8 @@ export function accumulate(
  * Run one tool call and turn it into the message that goes back to the model.
  *
  * A tool that is missing or throws does not stop the loop: the model is told
- * what went wrong and can try something else.
+ * what went wrong and can try something else. A tool that was interrupted
+ * says so, so the transcript stays valid.
  */
 export async function execTool(
   call: ToolCall,
@@ -165,6 +275,14 @@ export async function execTool(
       ...(result.isError === true ? { isError: true } : {}),
     };
   } catch (error) {
+    if (isAbort(error, signal)) {
+      return {
+        role: "tool",
+        callId: call.id,
+        content: INTERRUPTED,
+        isError: true,
+      };
+    }
     return {
       role: "tool",
       callId: call.id,
@@ -172,4 +290,26 @@ export async function execTool(
       isError: true,
     };
   }
+}
+
+/** The result for a call that was never run, so the transcript stays valid. */
+function notRun(call: ToolCall, reason: LoopEnd): ToolResultMsg {
+  const content =
+    reason === "aborted"
+      ? INTERRUPTED
+      : reason === "repeated-call"
+        ? "[not run: the same call repeated]"
+        : "[not run: the agent stopped]";
+  return { role: "tool", callId: call.id, content, isError: true };
+}
+
+/** Two calls are the same when they ask for the same thing with the same arguments. */
+function callSignature(call: ToolCall): string {
+  let args: string;
+  try {
+    args = JSON.stringify(call.args ?? null);
+  } catch {
+    args = String(call.args);
+  }
+  return `${call.name}:${args}`;
 }

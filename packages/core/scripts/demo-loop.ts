@@ -73,7 +73,7 @@ for await (const event of run(
       break;
     case "done":
       console.log(
-        `\n[done] stop=${event.stop} turns=${event.turns} usage=${event.usage.inputTokens} in / ${event.usage.outputTokens} out`,
+        `\n[done] reason=${event.reason} stop=${event.stop} turns=${event.turns} usage=${event.usage.inputTokens} in / ${event.usage.outputTokens} out`,
       );
       break;
   }

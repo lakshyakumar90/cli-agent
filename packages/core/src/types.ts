@@ -51,7 +51,51 @@ export interface AgentState {
   system?: string;
   /** Directory the tools work in. */
   cwd?: string;
+  /** The loop's limits. */
+  limits?: AgentLimits;
 }
+
+/** The loop's guards. */
+export interface AgentLimits {
+  /**
+   * How many times the model may be called for one prompt. Default 25.
+   * The loop stops with `"max-turns"` when the limit is reached.
+   */
+  maxTurns?: number;
+  /**
+   * How often the same tool call may repeat in one prompt. Default 3: the
+   * same call may happen three times, the fourth stops the loop with
+   * `"repeated-call"`.
+   */
+  maxRepeatedCalls?: number;
+  /** How many times a failed provider call is retried. Default 3. */
+  maxRetries?: number;
+  /** The first backoff wait. Default 500ms. */
+  retryDelayMs?: number;
+  /** The longest backoff wait. Default 8s. */
+  maxRetryDelayMs?: number;
+}
+
+export const DEFAULT_LIMITS: Required<AgentLimits> = {
+  maxTurns: 25,
+  maxRepeatedCalls: 3,
+  maxRetries: 3,
+  retryDelayMs: 500,
+  maxRetryDelayMs: 8_000,
+};
+
+/** Why the loop stopped. */
+export type LoopEnd =
+  /** The model answered and asked for nothing else. */
+  | "end"
+  /** The model hit its output limit. */
+  | "length"
+  /** The turn limit was reached. */
+  | "max-turns"
+  /** The model kept asking for the same thing. */
+  | "repeated-call"
+  /** The user pressed Esc. */
+  | "aborted";
 
 /**
  * What the loop yields.
@@ -68,8 +112,10 @@ export type AgentEvent =
   | { t: "toolStart"; call: ToolCall }
   /** The tool finished. */
   | { t: "toolEnd"; call: ToolCall; output: string; isError?: boolean }
+  /** The provider call failed and is being tried again. */
+  | { t: "retry"; attempt: number; delayMs: number; reason: string }
   /** The agent is done. */
-  | { t: "done"; stop: StopReason; turns: number; usage: Usage };
+  | { t: "done"; stop: StopReason; turns: number; usage: Usage; reason: LoopEnd };
 
 /** A state with the usual defaults. */
 export function createState(
