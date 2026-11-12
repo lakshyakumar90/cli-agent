@@ -1,0 +1,35 @@
+{
+  "name": "@cli-agent/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --clean --out-dir dist",
+    "start": "node dist/cli.js",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cli-agent/ai": "workspace:*",
+    "@cli-agent/core": "workspace:*",
+    "@cli-agent/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "eslint": "10.9.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "7.0.2",
+    "vitest": "^3.2.0"
+  }
+}
