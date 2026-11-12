@@ -61,8 +61,29 @@ export interface ModelInfo {
 /** One piece of an assistant turn. */
 export type Block =
   | { type: "text"; text: string }
-  | { type: "thinking"; text: string }
-  | { type: "toolCall"; id: string; name: string; args: any };
+  | {
+      type: "thinking";
+      text: string;
+      /**
+       * Provider-issued proof of this thought (Anthropic `signature_delta`,
+       * Gemini `thoughtSignature`). Providers that require signed reasoning
+       * reject a replay that drops it, so it travels with the block.
+       */
+      signature?: string;
+      /**
+       * Opaque payload for a thought the provider refuses to show (Anthropic
+       * `redacted_thinking`). It must be echoed back verbatim, but has no text.
+       */
+      redacted?: string;
+    }
+  | {
+      type: "toolCall";
+      id: string;
+      name: string;
+      args: any;
+      /** Signature of the call's part, when the provider sends one. */
+      signature?: string;
+    };
 
 export type ToolCall = Extract<Block, { type: "toolCall" }>;
 
@@ -82,7 +103,18 @@ export type StopReason = "end" | "tool" | "length";
 /** Streaming events emitted by every provider adapter. */
 export type Event =
   | { t: "text"; delta: string }
-  | { t: "thinking"; delta: string }
+  | {
+      t: "thinking";
+      delta: string;
+      /**
+       * A signature arriving with (or just after) a thinking delta. It may come
+       * on its own, with `delta` empty, in which case it belongs to the
+       * thinking block the loop just built.
+       */
+      signature?: string;
+      /** Payload of a provider-redacted thought; echo it back on replay. */
+      redacted?: string;
+    }
   | { t: "toolCall"; call: ToolCall }
   | { t: "done"; usage: Usage; stop: StopReason };
 

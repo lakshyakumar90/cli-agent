@@ -238,6 +238,38 @@ describe("anthropic stream", () => {
       { t: "done", usage: { inputTokens: 0, outputTokens: 0 }, stop: "length" },
     ]);
   });
+
+  it("captures thinking signatures and redacted thoughts", async () => {
+    const { provider } = makeProvider(
+      sseResponse([
+        event("content_block_start", {
+          index: 0,
+          content_block: { type: "thinking", thinking: "" },
+        }),
+        event("content_block_delta", {
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "reasoning" },
+        }),
+        event("content_block_delta", {
+          index: 0,
+          delta: { type: "signature_delta", signature: "sig-abc" },
+        }),
+        event("content_block_stop", { index: 0 }),
+        event("content_block_start", {
+          index: 1,
+          content_block: { type: "redacted_thinking", data: "opaque" },
+        }),
+        event("content_block_stop", { index: 1 }),
+      ]),
+    );
+
+    expect(await collect(provider, { model: "claude-test" })).toEqual([
+      { t: "thinking", delta: "reasoning" },
+      { t: "thinking", delta: "", signature: "sig-abc" },
+      { t: "thinking", delta: "", redacted: "opaque" },
+      { t: "done", usage: { inputTokens: 0, outputTokens: 0 }, stop: "end" },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -253,7 +285,7 @@ describe("anthropic request", () => {
       {
         role: "assistant",
         content: [
-          { type: "thinking", text: "hidden" },
+          { type: "thinking", text: "hidden", signature: "sig-think" },
           { type: "text", text: "checking" },
           { type: "toolCall", id: "toolu_1", name: "read", args: { path: "a.ts" } },
         ],
@@ -282,7 +314,7 @@ describe("anthropic request", () => {
     expect(call?.init?.method).toBe("POST");
     const headers = call?.init?.headers as Record<string, string>;
     expect(headers["x-api-key"]).toBe("sk-ant-test");
-    expect(headers["anthropic-version"]).toBe("2023-06-01");
+    expect(headers["anthropic-version"]).toBe("2026-10-21");
     expect(headers.accept).toBe("text/event-stream");
     expect(headers.authorization).toBeUndefined();
 
@@ -296,7 +328,7 @@ describe("anthropic request", () => {
     };
 
     expect(body.model).toBe("claude-test");
-    expect(body.max_tokens).toBe(8192);
+    expect(body.max_tokens).toBe(64000);
     expect(body.stream).toBe(true);
     expect(body.system).toBe("be brief");
     expect(body.messages).toEqual([
@@ -304,6 +336,7 @@ describe("anthropic request", () => {
       {
         role: "assistant",
         content: [
+          { type: "thinking", thinking: "hidden", signature: "sig-think" },
           { type: "text", text: "checking" },
           { type: "tool_use", id: "toolu_1", name: "read", input: { path: "a.ts" } },
         ],
@@ -357,6 +390,39 @@ describe("anthropic request", () => {
     expect(body.system).toBeUndefined();
     expect(body.max_tokens).toBe(1024);
     expect(body.tools).toBeUndefined();
+  });
+
+  it("replays redacted thoughts and drops unsigned ones", async () => {
+    const { provider, calls } = makeProvider(sseResponse([]));
+
+    await collect(provider, {
+      model: "claude-test",
+      messages: [
+        { role: "user", content: "hi" },
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", text: "unsigned" },
+            { type: "thinking", text: "", redacted: "opaque" },
+            { type: "text", text: "answer" },
+          ],
+        },
+      ],
+    });
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as {
+      messages: unknown[];
+    };
+    expect(body.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+      {
+        role: "assistant",
+        content: [
+          { type: "redacted_thinking", data: "opaque" },
+          { type: "text", text: "answer" },
+        ],
+      },
+    ]);
   });
 });
 
@@ -431,7 +497,7 @@ describe("anthropic models", () => {
       jsonResponse({
         data: [
           {
-            id: "claude-sonnet-4-5",
+            id: "claude-sonnet-5-5",
             display_name: "Claude Sonnet 4.5",
             type: "model",
           },
@@ -443,7 +509,7 @@ describe("anthropic models", () => {
       apiKey: "sk-ant-test",
       fetch: fetchImpl,
       modelInfo: {
-        "claude-sonnet-4-5": {
+        "claude-sonnet-5-5": {
           contextWindow: 200_000,
           maxOutputTokens: 64_000,
           pricing: { input: 3, output: 15 },
@@ -453,7 +519,7 @@ describe("anthropic models", () => {
 
     expect(await provider.models()).toEqual([
       {
-        id: "claude-sonnet-4-5",
+        id: "claude-sonnet-5-5",
         provider: "anthropic",
         name: "Claude Sonnet 4.5",
         contextWindow: 200_000,

@@ -28,8 +28,14 @@ import type {
 const DEFAULT_BASE_URL = "https://api.anthropic.com/v1";
 const DEFAULT_MESSAGES_PATH = "/messages";
 const DEFAULT_MODELS_PATH = "/models";
-const DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
-const DEFAULT_MAX_TOKENS = 8_192;
+/**
+ * Current API version. `2026-10-21` removed `temperature`, `top_p` and `top_k`
+ * (requests sending them return 400) and made signed thinking blocks mandatory
+ * when replaying a turn.
+ */
+const DEFAULT_ANTHROPIC_VERSION = "2026-10-21";
+/** Safe across every current model: the smallest max output is 64K. */
+const DEFAULT_MAX_TOKENS = 64_000;
 const MODELS_TIMEOUT_MS = 15_000;
 const MAX_MODEL_PAGES = 10;
 
@@ -45,17 +51,21 @@ export interface AnthropicOptions {
    * handed out by subscription logins.
    */
   auth?: "x-api-key" | "bearer";
-  /** Defaults to `"2023-06-01"`. */
+  /** Defaults to `"2026-10-21"`; override only for a pinning proxy. */
   anthropicVersion?: string;
   /** Extra headers merged last (e.g. `anthropic-beta`). */
   headers?: Record<string, string>;
-  /** Required by the API. Defaults to 8192; override per model if needed. */
+  /** Required by the API. Defaults to 64000, safe for every current model. */
   maxTokens?: number;
   /** Defaults to `/messages`. */
   messagesPath?: string;
   /** Defaults to `/models`. */
   modelsPath?: string;
-  /** Extra fields merged into every request body (`thinking`, `temperature`, …). */
+  /**
+   * Extra fields merged into every request body (`thinking`, `output_config`, …).
+   * Note that API version 2026-10-21 rejects `temperature`, `top_p` and `top_k`;
+   * steer the model with `output_config.effort` or `thinking` instead.
+   */
   body?: Record<string, unknown>;
   /** Static metadata merged over `/models` results, keyed by model id. */
   modelInfo?: Record<string, Partial<ModelInfo>>;
@@ -80,6 +90,10 @@ interface WireContentBlockStart {
   name?: string;
   input?: unknown;
   text?: string;
+  /** `redacted_thinking` carries its opaque payload here. */
+  data?: string;
+  thinking?: string;
+  signature?: string;
 }
 
 interface WireDelta {
@@ -103,6 +117,8 @@ interface WireStreamEvent {
 
 type WireContentBlock =
   | { type: "text"; text: string }
+  | { type: "thinking"; thinking: string; signature: string }
+  | { type: "redacted_thinking"; data: string }
   | { type: "tool_use"; id: string; name: string; input: unknown }
   | {
       type: "tool_result";
@@ -134,8 +150,9 @@ interface PendingToolUse {
  *
  * Consecutive user-side turns are merged so that parallel tool results land in
  * one message, which the API requires (a `tool_result` must directly answer an
- * assistant `tool_use`). Thinking blocks are dropped: replaying them correctly
- * requires their signatures, which the unified `Block` does not carry yet.
+ * assistant `tool_use`). Thinking blocks are replayed only when the provider
+ * signed them (or redacted them), because `2026-10-21` rejects modified or
+ * unsigned reasoning; an unsigned thought is dropped rather than sent.
  */
 function toWireMessages(messages: Msg[]): WireMessage[] {
   const wire: WireMessage[] = [];
@@ -175,6 +192,16 @@ function toWireMessages(messages: Msg[]): WireMessage[] {
     for (const block of message.content) {
       if (block.type === "text") {
         if (block.text.length > 0) content.push({ type: "text", text: block.text });
+      } else if (block.type === "thinking") {
+        if (block.redacted !== undefined) {
+          content.push({ type: "redacted_thinking", data: block.redacted });
+        } else if (block.signature !== undefined) {
+          content.push({
+            type: "thinking",
+            thinking: block.text,
+            signature: block.signature,
+          });
+        }
       } else if (block.type === "toolCall") {
         content.push({
           type: "tool_use",
@@ -469,6 +496,11 @@ export function anthropic(options: AnthropicOptions = {}): Provider {
           } else if (block?.type === "text" && block.text) {
             // Some proxies deliver a whole block up front instead of deltas.
             yield { t: "text", delta: block.text };
+          } else if (block?.type === "thinking" && block.thinking) {
+            yield { t: "thinking", delta: block.thinking };
+          } else if (block?.type === "redacted_thinking" && block.data) {
+            // No readable text: the signature is the whole block.
+            yield { t: "thinking", delta: "", redacted: block.data };
           }
           break;
         }
@@ -486,8 +518,11 @@ export function anthropic(options: AnthropicOptions = {}): Provider {
             const tool = toolUses.get(index) ?? { json: "" };
             tool.json += delta.partial_json ?? "";
             toolUses.set(index, tool);
+          } else if (delta.type === "signature_delta" && delta.signature) {
+            // Arrives after its thinking text; the loop attaches it to the block.
+            yield { t: "thinking", delta: "", signature: delta.signature };
           }
-          // `signature_delta` and `citations_delta` carry nothing actionable yet.
+          // `citations_delta` carries nothing actionable yet.
           break;
         }
 
