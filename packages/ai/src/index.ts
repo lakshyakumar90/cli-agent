@@ -4,3 +4,5 @@ export * from "./types.js";
 export * from "./errors.js";
 export * from "./providers/openai-compat.js";
 export * from "./providers/anthropic.js";
+export * from "./providers/gemini.js";
+export * from "./providers/antigravity.js";
