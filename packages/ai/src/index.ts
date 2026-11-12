@@ -6,6 +6,7 @@ export * from "./models.js";
 export * from "./stream.js";
 export * from "./registry.js";
 export * from "./providers/openai-compat.js";
+export * from "./providers/local-opencode.js";
 export * from "./providers/responses.js";
 export * from "./providers/codex.js";
 export * from "./providers/anthropic.js";
