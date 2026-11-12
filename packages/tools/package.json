@@ -13,6 +13,9 @@
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
+  "dependencies": {
+    "@cli-agent/ai": "workspace:*"
+  },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",

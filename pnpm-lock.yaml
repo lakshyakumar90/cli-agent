@@ -80,6 +80,13 @@ importers:
         version: 3.2.7(@types/node@26.4.1)(supports-color@7.2.0)(tsx@4.23.15)
 
   packages/core:
+    dependencies:
+      '@cli-agent/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@cli-agent/tools':
+        specifier: workspace:*
+        version: link:../tools
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
@@ -140,6 +147,10 @@ importers:
         version: 17.12.0
 
   packages/tools:
+    dependencies:
+      '@cli-agent/ai':
+        specifier: workspace:*
+        version: link:../ai
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*

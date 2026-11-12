@@ -9,9 +9,14 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
+    "demo:loop": "tsx scripts/demo-loop.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cli-agent/ai": "workspace:*",
+    "@cli-agent/tools": "workspace:*"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
