@@ -94,6 +94,18 @@ export interface AgentLimits {
   contextWindow?: number;
   /** What to keep back for the answer. Defaults to the model's own limit. */
   outputReserve?: number;
+  /**
+   * The most lines a tool result may have. Longer results keep their head
+   * and their tail. Default 60.
+   */
+  maxToolLines?: number;
+  /** The most characters a tool result may have. Default 4000. */
+  maxToolChars?: number;
+  /**
+   * How many turns a tool result stays readable. An older one is replaced by
+   * a one-line stub. Default 3.
+   */
+  keepToolTurns?: number;
   /** The first backoff wait. Default 500ms. */
   retryDelayMs?: number;
   /** The longest backoff wait. Default 8s. */
@@ -109,7 +121,7 @@ export const DEFAULT_LIMITS: Required<
     | "retryDelayMs"
     | "maxRetryDelayMs"
   >
-> = {
+> & AgentLimits = {
   maxTurns: 25,
   maxRepeatedCalls: 3,
   maxRetries: 3,
@@ -163,6 +175,10 @@ export function createState(
     messages?: Msg[];
     system?: string;
     cwd?: string;
+    /** The loop's limits. */
+    limits?: AgentLimits;
+    /** The skills, the plan and the checklist: the dynamic layer. */
+    active?: ActiveContext;
   },
 ): AgentState {
   return {
@@ -172,5 +188,7 @@ export function createState(
     messages: options.messages ?? [],
     ...(options.system === undefined ? {} : { system: options.system }),
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    ...(options.limits === undefined ? {} : { limits: options.limits }),
+    ...(options.active === undefined ? {} : { active: options.active }),
   };
 }

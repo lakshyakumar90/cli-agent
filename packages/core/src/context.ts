@@ -15,6 +15,7 @@ import { findMemoryFiles, type MemoryFile } from "./memory.js";
 import { buildSystemPrompt, type PromptOptions } from "./prompt.js";
 import { buildRepoMap, type RepoMapEntry } from "./repomap.js";
 import { findSkills, type Skill } from "./skills.js";
+import { stubOldToolResults } from "./shrink.js";
 import type { AgentState } from "./types.js";
 
 /** What a provider needs for one turn. */
@@ -102,7 +103,13 @@ export async function buildContext(
   return {
     model: state.model,
     system: await buildSystemPrompt(prompt),
-    messages: [...state.messages],
+    // The transcript is shortened before it is sent: an old tool result the
+    // model has moved on from is a stub, not a page of output.
+    messages: stubOldToolResults(state.messages, {
+      ...(state.limits?.keepToolTurns === undefined
+        ? {}
+        : { keepTurns: state.limits.keepToolTurns }),
+    }),
     tools: state.tools.map(toToolSpec),
   };
 }
@@ -148,4 +155,3 @@ function checklistOf(tools: AgentState["tools"]): string[] | undefined {
   }
   return undefined;
 }
-

@@ -28,6 +28,7 @@ import { budgetFor, estimateRequest, shouldCompact } from "./budget.js";
 import { compactMessages } from "./compact.js";
 import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
+import { shrinkText } from "./shrink.js";
 import {
   DEFAULT_LIMITS,
   type AgentEvent,
@@ -351,7 +352,16 @@ export async function execTool(
     return {
       role: "tool",
       callId: call.id,
-      content: result.output,
+      // A tool can say a great deal; the model rarely needs all of it, and
+      // the context is smaller for the rest of the session.
+      content: shrinkText(result.output, {
+        ...(state.limits?.maxToolLines === undefined
+          ? {}
+          : { maxLines: state.limits.maxToolLines }),
+        ...(state.limits?.maxToolChars === undefined
+          ? {}
+          : { maxChars: state.limits.maxToolChars }),
+      }),
       ...(result.isError === true ? { isError: true } : {}),
     };
   } catch (error) {
