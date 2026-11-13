@@ -37,6 +37,27 @@ export interface CompactOptions {
 }
 
 /**
+ * What the summary has to keep.
+ *
+ * The agent keeps working after the compaction, so the summary has to carry
+ * what it needs and drop what it does not: the goal, the decisions, the
+ * files that were touched, the tests that fail, the open tasks and what the
+ * user said they want.
+ */
+export const SUMMARY_INSTRUCTION = `Summarise this conversation for the agent that will keep working.
+
+Keep, in this order:
+- the goal: what the user asked for, in their terms
+- the decisions that were made, and why
+- the files that were touched, and what changed in them
+- the tests that fail, and the error they fail with
+- the open tasks
+- the preferences the user stated: the style they want, the tools to use,
+  what to avoid
+
+Drop: the file contents, the logs, the tool output, and the chatter.`;
+
+/**
  * The conversation, made smaller.
  *
  * Returns nothing when there is nothing to summarise, or when the model could
@@ -52,7 +73,7 @@ export async function compactMessages(
     budget,
     keep = DEFAULT_KEEP,
     signal,
-    instruction = "Summarise this conversation. Keep: what was asked, what was done, what was decided, and what is left to do. Drop the rest.",
+    instruction = SUMMARY_INSTRUCTION,
   } = options;
 
   const split = splitMessages(messages, budget, keep);
@@ -85,7 +106,7 @@ export async function compactMessages(
   return [
     {
       role: "user",
-      content: `This is where the conversation so far:\n\n${trimmed}`,
+      content: `Summary of earlier work:\n\n${trimmed}`,
     },
     ...recent,
   ];

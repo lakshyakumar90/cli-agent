@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Event, ModelInfo, Provider, StreamRequest } from "@cli-agent/ai";
-import { compactMessages, splitMessages } from "./compact.js";
+import { compactMessages, splitMessages, SUMMARY_INSTRUCTION } from "./compact.js";
 import { textOf } from "./budget.js";
 describe("compaction", () => {
   const summariser: Provider = {
@@ -38,6 +38,7 @@ describe("compaction", () => {
 
     expect(compacted).toHaveLength(2);
     expect(compacted?.[0]?.role).toBe("user");
+    expect(compacted?.[0]?.content).toContain("Summary of earlier work:");
     expect(compacted?.[0]?.content).toContain("the summary");
     expect(compacted?.[1]).toEqual(messages[2]);
   });
@@ -75,6 +76,26 @@ describe("compaction", () => {
     });
 
     expect(compacted).toBeUndefined();
+  });
+});
+
+
+describe("the summary prompt", () => {
+  it("asks for the things the agent needs to keep", () => {
+    for (const wanted of [
+      "goal",
+      "decisions",
+      "files",
+      "tests that fail",
+      "open tasks",
+      "preferences",
+    ]) {
+      expect(SUMMARY_INSTRUCTION).toContain(wanted);
+    }
+  });
+
+  it("tells it to drop the bulk", () => {
+    expect(SUMMARY_INSTRUCTION).toContain("Drop");
   });
 });
 
