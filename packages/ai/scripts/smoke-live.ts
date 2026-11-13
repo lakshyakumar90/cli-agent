@@ -231,6 +231,7 @@ if (targets.length === 0) {
 console.log(`live smoke test — ${targets.length} provider(s) with credentials\n`);
 
 let failures = 0;
+let quotaLimited = 0;
 
 for (const target of targets) {
   registry.register(target.provider, { replace: true });
@@ -256,7 +257,7 @@ for (const target of targets) {
 
   let worked = false;
   let hardError = false;
-  let quotaLimited = false;
+  let hitLimit = false;
 
   for (const model of candidates) {
     try {
@@ -273,24 +274,36 @@ for (const target of targets) {
     } catch (error) {
       const status = statusOf(error);
       // 402/429 are account limits (no credits, no quota), not adapter bugs.
-      const limited = status === 402 || status === 429;
+      const isLimit = status === 402 || status === 429;
       console.log(
-        `   model ${model}: ${limited ? "account limit" : "FAILED"} — ${describe(error)}`,
+        `   model ${model}: ${isLimit ? "account limit" : "FAILED"} — ${describe(error)}`,
       );
-      if (limited) quotaLimited = true;
+      if (isLimit) hitLimit = true;
       else hardError = true;
     }
   }
 
   if (!worked) {
-    if (quotaLimited && !hardError) {
-      console.log("   -> the account is out of quota/credits; the request reached the provider.");
+    if (hitLimit && !hardError) {
+      console.log(
+        "   -> the account is out of quota/credits; the request reached the provider.",
+      );
+      quotaLimited += 1;
     } else {
       failures += 1;
     }
   }
   console.log("");
 }
+
+console.log(
+  failures === 0
+    ? quotaLimited === 0
+      ? "all providers answered."
+      : `all providers answered (${quotaLimited} out of quota).`
+    : `${failures} provider(s) failed.`,
+);
+process.exit(failures === 0 ? 0 : 1);
 
 function statusOf(error: unknown): number | undefined {
   if (typeof error !== "object" || error === null) return undefined;
@@ -353,5 +366,3 @@ async function runStream(
   };
 }
 
-console.log(failures === 0 ? "all providers answered." : `${failures} provider(s) failed.`);
-process.exit(failures === 0 ? 0 : 1);
