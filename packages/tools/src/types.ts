@@ -42,6 +42,15 @@ export interface Tool {
   description: string;
   /** The arguments, as a zod schema. */
   schema: ZodType;
+  /**
+   * What the tool does to the world.
+   *
+   * The permission layer uses it: `read` tools may run in plan mode,
+   * `write` tools are the ones auto-edit lets through, and `execute` tools
+   * are the ones that always ask. A tool that does not say is treated as
+   * `write`, which is the careful answer.
+   */
+  effect?: "read" | "write" | "execute";
   /** Runs the tool. */
   run(args: any, ctx: ToolContext): Promise<ToolResult>;
   /**
@@ -61,6 +70,7 @@ export function defineTool<S extends ZodType>(definition: {
   name: string;
   description: string;
   schema: S;
+  effect?: "read" | "write" | "execute";
   run(args: z.infer<S>, ctx: ToolContext): Promise<ToolResult>;
   needsApproval?(args: z.infer<S>): boolean;
 }): Tool {

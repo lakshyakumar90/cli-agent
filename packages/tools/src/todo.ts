@@ -20,6 +20,7 @@ export function createTodoTool(initial: Todo[] = []): Tool {
 
   return defineTool({
     name: "todo",
+    effect: "read",
     description:
       "Keep a checklist of what is left to do. Send the whole list every time, with the items that are done marked as completed.",
     schema: z.object({
@@ -61,3 +62,4 @@ export function createTodoTool(initial: Todo[] = []): Tool {
     },
   });
 }
+

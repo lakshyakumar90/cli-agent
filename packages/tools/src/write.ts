@@ -11,6 +11,7 @@ import { displayPath, resolvePath } from "./paths.js";
 export function createWriteTool(): Tool {
   return defineTool({
     name: "write",
+    effect: "write",
     description:
       "Write a file, creating it if it is missing and replacing it if it is not. Missing directories are created.",
     schema: z.object({
@@ -45,3 +46,4 @@ export function createWriteTool(): Tool {
     },
   });
 }
+

@@ -27,6 +27,7 @@ export function createReadTool(options: ReadOptions = {}): Tool {
 
   return defineTool({
     name: "read",
+    effect: "read",
     description:
       "Read a file. Shows every line with its number. Use offset and limit to read part of a big file.",
     schema: z.object({
@@ -113,3 +114,4 @@ export function createReadTool(options: ReadOptions = {}): Tool {
     },
   });
 }
+

@@ -2,6 +2,7 @@
 
 export * from "./types.js";
 export * from "./validate.js";
+export * from "./permissions/index.js";
 export * from "./paths.js";
 export * from "./exec.js";
 export * from "./run.js";

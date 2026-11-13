@@ -42,6 +42,7 @@ export function createBashTool(options: BashOptions = {}): Tool {
 
   return defineTool({
     name: "bash",
+    effect: "execute",
     description:
       "Run a shell command and return its output. Long commands are stopped; very long output is shortened.",
     schema: z.object({
@@ -232,3 +233,4 @@ function shellEnv(shell: Shell): NodeJS.ProcessEnv {
   }
   return {};
 }
+

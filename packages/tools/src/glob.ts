@@ -27,6 +27,7 @@ export function createGlobTool(options: GlobOptions = {}): Tool {
 
   return defineTool({
     name: "glob",
+    effect: "read",
     description:
       "Find the files whose names match a pattern, e.g. '**/*.ts'. The output is one path per line, relative to the working directory.",
     schema: z.object({
@@ -97,4 +98,5 @@ export function createGlobTool(options: GlobOptions = {}): Tool {
     },
   });
 }
+
 

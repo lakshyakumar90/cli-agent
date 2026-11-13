@@ -22,6 +22,7 @@ export function createEditTool(options: EditOptions = {}): Tool {
 
   return defineTool({
     name: "edit",
+    effect: "write",
     description:
       "Replace an exact string in a file. The old string must be in the file, and it must appear exactly once unless replace_all is set.",
     schema: z.object({
@@ -112,3 +113,4 @@ export function countOccurrences(content: string, needle: string): number {
   }
   return count;
 }
+

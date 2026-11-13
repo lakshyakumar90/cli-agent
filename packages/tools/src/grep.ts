@@ -29,6 +29,7 @@ export function createGrepTool(options: GrepOptions = {}): Tool {
 
   return defineTool({
     name: "grep",
+    effect: "read",
     description:
       "Search the files for a pattern. The output is file:line:text for every match. Files git ignores are skipped.",
     schema: z.object({
@@ -192,4 +193,5 @@ export function extensionFilter(glob: string | undefined): string[] | undefined 
   const match = /\*\.([A-Za-z0-9]+)$/.exec(glob);
   return match === null ? undefined : [match[1]!.toLowerCase()];
 }
+
 
