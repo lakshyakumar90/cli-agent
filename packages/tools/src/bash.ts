@@ -28,6 +28,95 @@ export interface BashOptions {
   timeoutMs?: number;
   /** The shell to run in. Defaults to the platform's. */
   shell?: Shell;
+  /**
+   * Run the command inside a sandbox.
+   *
+   * The tool runs commands with the user's own rights, which is enough for
+   * a trusted session and nothing like enough for an untrusted one. Docker,
+   * bubblewrap and sandbox-exec are the real answers; this is where they go.
+   */
+  sandbox?: Sandbox;
+}
+
+/**
+ * A sandbox: it turns a command into the command line that runs it inside.
+ */
+export interface Sandbox {
+  /** The program and its arguments. */
+  wrap(command: string, cwd: string): [string, string[]];
+}
+
+/**
+ * Run the command in a container.
+ *
+ * The workspace is mounted at /work and is the only writable place. The
+ * image has to carry the tools the project needs.
+ */
+export function dockerSandbox(
+  options: { image?: string; extraArgs?: string[] } = {},
+): Sandbox {
+  const { image = "node:22-alpine", extraArgs = [] } = options;
+
+  return {
+    wrap(command: string, cwd: string): [string, string[]] {
+      return [
+        "docker",
+        [
+          "run",
+          "--rm",
+          "-i",
+          "--network",
+          "none",
+          "-v",
+          `${cwd}:/work`,
+          "-w",
+          "/work",
+          ...extraArgs,
+          image,
+          "sh",
+          "-c",
+          command,
+        ],
+      ];
+    },
+  };
+}
+
+/**
+ * Run the command in a bubblewrap sandbox.
+ *
+ * The filesystem is read-only except for the workspace, and the process gets
+ * its own namespaces.
+ */
+export function bubblewrapSandbox(
+  options: { extraArgs?: string[] } = {},
+): Sandbox {
+  const { extraArgs = [] } = options;
+
+  return {
+    wrap(command: string, cwd: string): [string, string[]] {
+      return [
+        "bwrap",
+        [
+          "--ro-bind",
+          "/",
+          "/",
+          "--bind",
+          cwd,
+          cwd,
+          "--dev",
+          "/dev",
+          "--proc",
+          "/proc",
+          "--unshare-all",
+          ...extraArgs,
+          "sh",
+          "-c",
+          command,
+        ],
+      ];
+    },
+  };
 }
 
 /** The shells a command can run in. */
@@ -38,6 +127,7 @@ export function createBashTool(options: BashOptions = {}): Tool {
     maxOutput = DEFAULT_MAX_OUTPUT,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     shell = detectShell(),
+    sandbox,
   } = options;
 
   return defineTool({
@@ -63,7 +153,10 @@ export function createBashTool(options: BashOptions = {}): Tool {
       const cwd = args.cwd === undefined ? ctx.cwd : resolvePath(ctx.cwd, args.cwd);
       const limit = Math.min(args.timeout ?? timeoutMs, MAX_TIMEOUT_MS);
 
-      const [command, commandArgs] = shellCommand(shell, args.command);
+      const [command, commandArgs] =
+        sandbox === undefined
+          ? shellCommand(shell, args.command)
+          : sandbox.wrap(args.command, cwd);
 
       return new Promise((resolve) => {
         const child = spawn(command, commandArgs, {

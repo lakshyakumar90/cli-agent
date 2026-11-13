@@ -78,22 +78,34 @@ describe("bash", () => {
 
     expect(result.isError).toBe(true);
     expect(result.output).toContain("timed out");
-  });
+  }, 20_000);
 
   it("stops when the caller aborts", async () => {
     const controller = new AbortController();
     const tool = createBashTool({ timeoutMs: 30_000 });
 
+    // Wait until the command has really started, so the abort cannot land
+    // before the child exists.
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
     const pending = tool.run(
-      { command: sleepCommand(10) },
-      context({ signal: controller.signal }),
+      { command: `echo started && ${sleepCommand(10)}` },
+      context({
+        signal: controller.signal,
+        onOutput: () => markStarted(),
+      }),
     );
-    setTimeout(() => controller.abort(), 100);
+
+    await started;
+    controller.abort();
 
     const result = await pending;
     expect(result.isError).toBe(true);
     expect(result.output).toContain("stopped");
-  });
+  }, 20_000);
 
   it("streams the output as it arrives", async () => {
     const chunks: string[] = [];
@@ -289,4 +301,5 @@ describe("todo", () => {
     expect(result.output).not.toContain("[ ] one");
   });
 });
+
 
