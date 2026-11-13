@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@cli-agent/ai": "workspace:*",
-    "@cli-agent/tools": "workspace:*"
+    "@cli-agent/tools": "workspace:*",
+    "js-tiktoken": "^1.0.21"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -33,4 +34,3 @@
     "zod": "^4.6.7"
   }
 }
-
