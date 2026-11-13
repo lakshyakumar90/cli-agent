@@ -27,16 +27,22 @@ import {
   type MemoryFile,
 } from "./memory.js";
 import { findSkills, renderActiveContext, type ActiveContext } from "./skills.js";
+import { buildRepoMap, renderRepoMap, type RepoMapEntry } from "./repomap.js";
 
 /** The base identity and the rules for using tools. */
 export const BASE_PROMPT = `You are a coding agent working in the user's repository.
 
 How to work:
 - Read a file before you change it, and read the tests before you change the code.
+- Read a file in slices: use offset and limit for the part you need, and ask for more when you need more.
 - Prefer the edit tool for a change to a file you have read; it is exact, and it fails loudly when the text is not there.
 - Keep the change as small as it can be. Do not reformat what you were not asked to touch.
 - Run the tests when there are tests, and say what failed when something does.
+- Find things with the search tools (grep, glob) before you read whole files.
 - Do not guess: if you need to see something, read it.
+
+Notes:
+- NOTES.md in the project holds the facts that must outlive this conversation. Write to it when something is worth keeping.
 
 How to answer:
 - Say what you did, briefly, and what the reader should do next.
@@ -67,6 +73,8 @@ export interface PromptOptions {
   environment?: Environment;
   /** The project memory. Read from the working directory when it is left out. */
   memory?: MemoryFile[];
+  /** The outline of the project. Read from the working directory when it is left out. */
+  map?: RepoMapEntry[];
   /** The skills, the plan and the checklist. */
   active?: ActiveContext;
   /** Read the memory and the environment when they are not given. */
@@ -106,6 +114,19 @@ export async function buildPromptLayers(
     layers.push({
       name: "memory",
       text: renderMemory(options.cwd, memory),
+      stable: true,
+    });
+  }
+
+  // [3] The outline of the project: what is in it, before a file is read.
+  const map =
+    options.map ??
+    (options.read === true ? await buildRepoMap(options.cwd) : []);
+  const mapText = renderRepoMap(map);
+  if (mapText.length > 0) {
+    layers.push({
+      name: "map",
+      text: mapText,
       stable: true,
     });
   }

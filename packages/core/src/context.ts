@@ -13,6 +13,7 @@ import { toToolSpec } from "@cli-agent/tools";
 import { readEnvironment, type Environment } from "./environment.js";
 import { findMemoryFiles, type MemoryFile } from "./memory.js";
 import { buildSystemPrompt, type PromptOptions } from "./prompt.js";
+import { buildRepoMap, type RepoMapEntry } from "./repomap.js";
 import { findSkills, type Skill } from "./skills.js";
 import type { AgentState } from "./types.js";
 
@@ -43,6 +44,7 @@ interface SessionReads {
   memory?: MemoryFile[];
   skills?: Skill[];
   environment?: Environment;
+  map?: RepoMapEntry[];
 }
 
 const reads = new WeakMap<AgentState, SessionReads>();
@@ -66,6 +68,9 @@ export async function buildContext(
   if (session.environment === undefined && read) {
     session.environment = await readEnvironment(cwd);
   }
+  if (session.map === undefined && read) {
+    session.map = await buildRepoMap(cwd);
+  }
 
   const environment = session.environment;
   const active = options.active ?? state.active;
@@ -80,6 +85,7 @@ export async function buildContext(
       ? {}
       : { environment: { ...environment, date: today() } }),
     ...(session.memory === undefined ? {} : { memory: session.memory }),
+    ...(session.map === undefined ? {} : { map: session.map }),
     ...(active === undefined && skills === undefined && checklist === undefined
       ? {}
       : {
@@ -142,3 +148,4 @@ function checklistOf(tools: AgentState["tools"]): string[] | undefined {
   }
   return undefined;
 }
+

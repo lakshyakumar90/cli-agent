@@ -11,8 +11,13 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, parse, relative, sep } from "node:path";
 
-/** The files that hold a project's memory, in the order they are preferred. */
-export const MEMORY_FILES = ["AGENTS.md", "CLAUDE.md"] as const;
+/**
+ * The files that hold a project's memory, in the order they are preferred.
+ *
+ * NOTES.md is the agent's own: it holds the facts that must outlive a
+ * conversation, so it is read like the rest.
+ */
+export const MEMORY_FILES = ["AGENTS.md", "CLAUDE.md", "NOTES.md"] as const;
 
 /** One memory file. */
 export interface MemoryFile {
