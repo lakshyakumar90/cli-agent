@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 // @cli-agent/cli — the terminal interface: interactive, print and JSON modes.
 
-import { createInterface, emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import { parseArgs, HELP } from "./args.js";
-import { runInteractive, runJson, runPrint, runRpc } from "./commands.js";
+import { runJson, runPrint, runRpc } from "./commands.js";
 import { createSession } from "./session.js";
+import { InteractiveUi } from "./ui/interactive.js";
+import { setColors, shouldUseColors } from "./ui/colors.js";
+import { loadAgents } from "./agents.js";
+import { SessionStore, newSessionId } from "./sessions.js";
+import { createProvider } from "@cli-agent/ai";
+import { AuthManager } from "@cli-agent/ai";
 import type { AskPermission } from "@cli-agent/tools";
 
 async function main(): Promise<number> {
@@ -21,18 +26,16 @@ async function main(): Promise<number> {
   }
 
   const options = parsed.options;
+  setColors(shouldUseColors());
 
   // Esc stops the turn that is running.
   const session = new AbortController();
-  let turn = new AbortController();
-  emitKeypressEvents(input);
-  input.on("keypress", (_key, key) => {
-    if (key.name === "escape") turn.abort();
-  });
 
   // The permission prompt: one line, one answer.
   const askPermission: AskPermission = async (request) => {
-    process.stderr.write(`\n${request.reason}\n[y]es / [n]o / [a]lways? `);
+    process.stderr.write(
+      `\n${request.reason}\n[y]es / [n]o / [a]lways? `,
+    );
     const answer = (await readLine("")).trim().toLowerCase();
     if (answer.startsWith("a")) return "allow-always";
     return answer.startsWith("y") ? "allow" : "deny";
@@ -48,7 +51,9 @@ async function main(): Promise<number> {
       ask: askPermission,
     }));
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return 1;
   }
 
@@ -79,21 +84,50 @@ async function main(): Promise<number> {
       });
 
     case "interactive":
-    default:
-      return runInteractive({
+    default: {
+      const store = new SessionStore();
+      const ui = new InteractiveUi({
         state,
-        streams: { out: process.stdout, err: process.stderr },
-        ask: readLine,
-        signalFor: () => turn.signal,
-        onExit: () => session.abort(),
-        verbose: options.verbose,
+        out: process.stdout,
+        err: process.stderr,
+        input,
+        model: options.model,
+        permissionMode: options.permissionMode,
+        cwd: options.cwd,
+        sessionId: newSessionId(),
+        sessions: store,
+        agents: await loadAgents(),
+        onModel: async (ref) => {
+          try {
+            const provider = await createProvider(ref.split("/")[0] as string);
+            return provider;
+          } catch (error) {
+            process.stderr.write(
+              `${error instanceof Error ? error.message : String(error)}\n`,
+            );
+            return undefined;
+          }
+        },
+        onLogin: async (provider) => {
+          const auth = new AuthManager();
+          try {
+            const result = await auth.login(provider);
+            return `signed in to ${provider}`;
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        },
       });
+
+      return ui.run();
+    }
   }
 }
 
 /** One line of input from the user. */
 function readLine(prompt: string): Promise<string> {
   return new Promise((resolve) => {
+    const { createInterface } = require("node:readline") as typeof import("node:readline");
     const rl = createInterface({ input, output });
     rl.question(prompt, (answer) => {
       rl.close();
@@ -104,6 +138,7 @@ function readLine(prompt: string): Promise<string> {
 
 /** The input, line by line. */
 async function* readLines(): AsyncGenerator<string> {
+  const { createInterface } = require("node:readline") as typeof import("node:readline");
   const rl = createInterface({ input, terminal: false });
   for await (const line of rl) {
     yield line;
