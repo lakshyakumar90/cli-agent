@@ -15,10 +15,13 @@ export interface Todo {
   status: "pending" | "in_progress" | "completed";
 }
 
-export function createTodoTool(initial: Todo[] = []): Tool {
+export function createTodoTool(initial: Todo[] = []): Tool & {
+  /** The checklist as it is now. */
+  list(): Todo[];
+} {
   let todos: Todo[] = [...initial];
 
-  return defineTool({
+  const tool = defineTool({
     name: "todo",
     effect: "read",
     description:
@@ -61,5 +64,7 @@ export function createTodoTool(initial: Todo[] = []): Tool {
       };
     },
   });
+
+  return { ...tool, list: () => todos };
 }
 
