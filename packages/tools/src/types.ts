@@ -20,6 +20,11 @@ export interface ToolContext {
   cwd: string;
   /** Cancels a long-running tool. */
   signal: AbortSignal;
+  /**
+   * Called with output as it arrives, for tools that produce it while they
+   * run (bash). A tool still returns the whole output at the end.
+   */
+  onOutput?: (text: string) => void;
 }
 
 /** What a tool gives back. */
