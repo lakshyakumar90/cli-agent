@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { run } from "./loop.js";
 import {
   collectAgent,
@@ -209,7 +210,7 @@ describe("a sub-agent", () => {
     const other = {
       name: "other",
       description: "Another tool.",
-      schema: { type: "object" },
+      schema: z.object({}),
       async run() {
         return { output: "other ran" };
       },
@@ -243,3 +244,4 @@ describe("a sub-agent", () => {
     expect(summary.reason).toBe("end");
   });
 });
+

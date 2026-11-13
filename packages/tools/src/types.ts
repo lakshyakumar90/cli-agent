@@ -1,12 +1,18 @@
 /**
  * The tool contract.
  *
- * A tool is something the model may call. The description and the JSON
- * Schema are what the provider advertises; `run` is the executable side,
- * which Phase 3 fills in (read, write, edit, bash, grep, glob, todo).
+ * A tool is something the model may call. The description and the schema are
+ * what the provider advertises; `run` is the executable side, which Phase 3
+ * fills in (read, write, edit, bash, grep, glob, todo).
+ *
+ * The schema is a zod schema. The JSON Schema the model is told is derived
+ * from it, so the shape the model is shown and the shape the arguments are
+ * checked against are the same thing by construction — they cannot drift
+ * apart.
  */
 
 import type { JSONSchema, ToolSpec } from "@cli-agent/ai";
+import { z, type ZodType } from "zod";
 
 /** What a tool is given when it runs. */
 export interface ToolContext {
@@ -29,13 +35,8 @@ export interface Tool {
   name: string;
   /** What it does, in the words the model reads. */
   description: string;
-  /**
-   * The arguments, as JSON Schema.
-   *
-   * This is what the model is told, and what its arguments are checked
-   * against before the tool runs (see validate.ts).
-   */
-  schema: JSONSchema;
+  /** The arguments, as a zod schema. */
+  schema: ZodType;
   /** Runs the tool. */
   run(args: any, ctx: ToolContext): Promise<ToolResult>;
   /**
@@ -45,11 +46,58 @@ export interface Tool {
   needsApproval?(args: any): boolean;
 }
 
+/**
+ * Define a tool.
+ *
+ * The arguments are typed from the schema, so a tool author does not repeat
+ * what the schema already says.
+ */
+export function defineTool<S extends ZodType>(definition: {
+  name: string;
+  description: string;
+  schema: S;
+  run(args: z.infer<S>, ctx: ToolContext): Promise<ToolResult>;
+  needsApproval?(args: z.infer<S>): boolean;
+}): Tool {
+  return definition;
+}
+
+/** The JSON Schema of a tool, derived once and kept. */
+const jsonSchemas = new WeakMap<Tool, JSONSchema>();
+
 /** The wire form of a tool, for the provider request. */
 export function toToolSpec(tool: Tool): ToolSpec {
+  let schema = jsonSchemas.get(tool);
+  if (schema === undefined) {
+    schema = toJsonSchema(tool.schema);
+    jsonSchemas.set(tool, schema);
+  }
   return {
     name: tool.name,
     description: tool.description,
-    schema: tool.schema,
+    schema,
   };
+}
+
+/**
+ * The JSON Schema for a zod schema.
+ *
+ * The input side is used: it is what the model is allowed to send. A type
+ * that has no JSON Schema equivalent becomes "any" rather than an error, and
+ * a schema that cannot be converted at all falls back to "anything goes".
+ */
+export function toJsonSchema(schema: ZodType): JSONSchema {
+  try {
+    const json = z.toJSONSchema(schema, {
+      io: "input",
+      unrepresentable: "any",
+    }) as Record<string, unknown>;
+
+    // The dialect marker is noise on the wire.
+    const { $schema: _dialect, ...rest } = json;
+    void _dialect;
+    return rest as JSONSchema;
+  } catch {
+    return {};
+  }
 }

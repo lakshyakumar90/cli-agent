@@ -12,6 +12,7 @@ import type {
   Usage,
 } from "@cli-agent/ai";
 import type { Tool, ToolContext } from "@cli-agent/tools";
+import { z } from "zod";
 import { createState, type AgentState } from "./types.js";
 
 export interface ScriptedTurn {
@@ -80,11 +81,7 @@ export function echoTool(onRun?: (args: any, ctx: ToolContext) => void): EchoToo
   return {
     name: "echo",
     description: "Echoes the text back.",
-    schema: {
-      type: "object",
-      properties: { text: { type: "string" } },
-      required: ["text"],
-    },
+    schema: z.object({ text: z.string() }),
     calls,
     async run(args: any, ctx: ToolContext) {
       calls.push({ args, ctx });

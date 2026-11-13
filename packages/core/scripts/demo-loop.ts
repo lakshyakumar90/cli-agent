@@ -11,16 +11,13 @@
 
 import { gemini, openaiCompat } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
+import { z } from "zod";
 import { createState, run } from "../src/index.js";
 
 const echo: Tool = {
   name: "echo",
   description: "Echoes the text back to you. Use it to test that you can call tools.",
-  schema: {
-    type: "object",
-    properties: { text: { type: "string" } },
-    required: ["text"],
-  },
+  schema: z.object({ text: z.string() }),
   async run(args: { text: string }) {
     return { output: `echo: ${args.text}` };
   },
@@ -83,3 +80,4 @@ console.log("\ntranscript:");
 for (const message of state.messages) {
   console.log(`  ${message.role}: ${JSON.stringify(message.content)}`);
 }
+

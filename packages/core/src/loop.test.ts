@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Tool } from "@cli-agent/tools";
+import { toToolSpec, type Tool } from "@cli-agent/tools";
+import { z } from "zod";
 import { buildContext } from "./context.js";
 import { accumulate, execTool, run } from "./loop.js";
 import {
@@ -101,7 +102,7 @@ describe("the agent loop", () => {
       {
         name: "echo",
         description: "Echoes the text back.",
-        schema: echo.schema,
+        schema: toToolSpec(echo).schema,
       },
     ]);
   });
@@ -160,7 +161,7 @@ describe("the agent loop", () => {
     const boom: Tool = {
       name: "boom",
       description: "Throws.",
-      schema: { type: "object" },
+      schema: z.object({}),
       async run() {
         throw new Error("kaboom");
       },
@@ -265,7 +266,7 @@ describe("buildContext", () => {
         {
           name: "echo",
           description: "Echoes the text back.",
-          schema: echo.schema,
+          schema: toToolSpec(echo).schema,
         },
       ],
     });
@@ -317,7 +318,8 @@ describe("execTool", () => {
       new AbortController().signal,
     );
 
-    expect(result.content).toContain('missing required property "text"');
+    expect(result.content).toContain("missing required value");
+    expect(result.content).toContain("text");
   });
 });
 

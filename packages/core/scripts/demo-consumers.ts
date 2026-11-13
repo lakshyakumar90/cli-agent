@@ -11,6 +11,7 @@
 
 import { gemini, openaiCompat } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
+import { z } from "zod";
 import {
   collectAgent,
   createState,
@@ -24,11 +25,7 @@ import {
 const echo: Tool = {
   name: "echo",
   description: "Echoes the text back to you. Use it to test that you can call tools.",
-  schema: {
-    type: "object",
-    properties: { text: { type: "string" } },
-    required: ["text"],
-  },
+  schema: z.object({ text: z.string() }),
   async run(args: { text: string }) {
     return { output: `echo: ${args.text}` };
   },
@@ -107,3 +104,4 @@ const sub = await collectAgent(
 );
 console.log(`sub-agent said: ${sub.text}`);
 console.log(`parent transcript untouched: ${parent.messages.length} messages`);
+

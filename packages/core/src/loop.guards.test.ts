@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ProviderError, type StreamRequest } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
+import { z } from "zod";
 import { INTERRUPTED, run } from "./loop.js";
 import { backoffDelay, isRetryableError, sleep } from "./retry.js";
 import {
@@ -222,7 +223,7 @@ describe("abort", () => {
     const slow: Tool = {
       name: "slow",
       description: "Waits.",
-      schema: { type: "object" },
+      schema: z.object({}),
       async run(_args, ctx) {
         await new Promise((resolve, reject) => {
           const timer = setTimeout(resolve, 5_000);
@@ -462,3 +463,4 @@ describe("the end of a run", () => {
     );
   });
 });
+
