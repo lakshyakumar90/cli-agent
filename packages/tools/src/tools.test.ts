@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBashTool, detectShell, shorten, type Shell } from "./bash.js";
+import { bubblewrapSandbox, dockerSandbox } from "./bash.js";
 import { createGlobTool } from "./glob.js";
 import { createGrepTool } from "./grep.js";
 import { createTodoTool } from "./todo.js";
@@ -247,6 +248,56 @@ describe("glob", () => {
 
     expect(result.output).toContain("a.ts");
     expect(result.output).not.toContain("build");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sandbox
+// ---------------------------------------------------------------------------
+
+describe("the sandbox", () => {
+  it("wraps the command in the program it names", async () => {
+    const sandbox = {
+      wrap(command: string): [string, string[]] {
+        return [
+          process.execPath,
+          ["-e", `console.log("sandbox: " + ${JSON.stringify(command)})`],
+        ];
+      },
+    };
+
+    const result = await createBashTool({ sandbox }).run(
+      { command: "echo hi" },
+      context(),
+    );
+
+    expect(result.output).toContain("sandbox: echo hi");
+  });
+
+  it("builds a docker command line", () => {
+    const [command, args] = dockerSandbox({ image: "node:22" }).wrap(
+      "npm test",
+      "/work/project",
+    );
+
+    expect(command).toBe("docker");
+    expect(args).toContain("run");
+    expect(args).toContain("--rm");
+    expect(args).toContain("/work/project:/work");
+    expect(args).toContain("node:22");
+    expect(args[args.length - 1]).toBe("npm test");
+  });
+
+  it("builds a bubblewrap command line", () => {
+    const [command, args] = bubblewrapSandbox().wrap(
+      "npm test",
+      "/work/project",
+    );
+
+    expect(command).toBe("bwrap");
+    expect(args).toContain("--unshare-all");
+    expect(args).toContain("/work/project");
+    expect(args[args.length - 1]).toBe("npm test");
   });
 });
 
