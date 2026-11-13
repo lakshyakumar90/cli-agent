@@ -94,7 +94,9 @@ describe("the agent loop", () => {
 
     const request = provider.requests[0];
     expect(request?.model).toBe("test-model");
-    expect(request?.system).toBe("Be terse.");
+    // The system prompt is layered: the base layer, then the tools.
+    expect(request?.system).toContain("Be terse.");
+    expect(request?.system).toContain("echo");
     expect(request?.messages).toEqual([
       { role: "user", content: "hello" },
     ]);
@@ -250,7 +252,7 @@ describe("accumulate", () => {
 });
 
 describe("buildContext", () => {
-  it("carries the model, the prompt, the transcript and the tools", () => {
+  it("carries the model, the prompt, the transcript and the tools", async () => {
     const provider = scriptedProvider([]);
     const echo = echoTool();
     const state = stateWith(provider, [echo], {
@@ -258,18 +260,21 @@ describe("buildContext", () => {
       messages: [{ role: "user", content: "earlier" }],
     });
 
-    expect(buildContext(state)).toEqual({
-      model: "test-model",
-      system: "Be terse.",
-      messages: [{ role: "user", content: "earlier" }],
-      tools: [
-        {
-          name: "echo",
-          description: "Echoes the text back.",
-          schema: toToolSpec(echo).schema,
-        },
-      ],
-    });
+    const context = await buildContext(state);
+
+    expect(context.model).toBe("test-model");
+    expect(context.messages).toEqual([{ role: "user", content: "earlier" }]);
+    expect(context.tools).toEqual([
+      {
+        name: "echo",
+        description: "Echoes the text back.",
+        schema: toToolSpec(echo).schema,
+      },
+    ]);
+    // The prompt is layered.
+    expect(context.system).toContain("Be terse.");
+    expect(context.system).toContain("echo");
+    expect(context.system).toContain("Working directory:");
   });
 });
 

@@ -11,6 +11,7 @@ import type {
   Usage,
 } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
+import type { ActiveContext } from "./skills.js";
 
 /**
  * One assistant turn, while it is being built.
@@ -47,12 +48,14 @@ export interface AgentState {
   tools: Tool[];
   /** The conversation so far. */
   messages: Msg[];
-  /** The system prompt. */
+  /** The system prompt. It is the base layer of the layered prompt. */
   system?: string;
   /** Directory the tools work in. */
   cwd?: string;
   /** The loop's limits. */
   limits?: AgentLimits;
+  /** The skills, the plan and the checklist: the dynamic layer. */
+  active?: ActiveContext;
 }
 
 /** The loop's guards. */

@@ -12,6 +12,8 @@
     "demo:loop": "tsx scripts/demo-loop.ts",
     "demo:consumers": "tsx scripts/demo-consumers.ts",
     "demo:tools": "tsx scripts/demo-tools.ts",
+    "demo:permissions": "tsx scripts/demo-permissions.ts",
+    "demo:prompt": "tsx scripts/demo-prompt.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
@@ -31,3 +33,4 @@
     "zod": "^4.6.7"
   }
 }
+

@@ -2,6 +2,10 @@
 
 export * from "./types.js";
 export * from "./context.js";
+export * from "./prompt.js";
+export * from "./memory.js";
+export * from "./environment.js";
+export * from "./skills.js";
 export * from "./retry.js";
 export * from "./loop.js";
 export * from "./render.js";

@@ -97,7 +97,7 @@ export async function* run(
       return;
     }
 
-    const ctx: Context = buildContext(state);
+    const ctx: Context = await buildContext(state);
     const turn: AssistantTurn = { role: "assistant", content: [] };
     turns += 1;
     let aborted = false;
@@ -327,3 +327,4 @@ function callSignature(call: ToolCall): string {
   }
   return `${call.name}:${args}`;
 }
+
