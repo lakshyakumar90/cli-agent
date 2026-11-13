@@ -56,6 +56,19 @@ export interface AgentState {
   limits?: AgentLimits;
   /** The skills, the plan and the checklist: the dynamic layer. */
   active?: ActiveContext;
+  /** How far off the token estimate was, so the next one is closer. */
+  tokens?: TokenCalibration;
+}
+
+/**
+ * The correction to the token estimate.
+ *
+ * The provider says how many tokens it really used; the ratio between that
+ * and the estimate is applied to the next estimate.
+ */
+export interface TokenCalibration {
+  /** Real tokens over estimated tokens. */
+  ratio: number;
 }
 
 /** The loop's guards. */
@@ -73,13 +86,30 @@ export interface AgentLimits {
   maxRepeatedCalls?: number;
   /** How many times a failed provider call is retried. Default 3. */
   maxRetries?: number;
+  /**
+   * The context window to assume, when the model table does not know the
+   * model. Without it, a model the table does not know has no budget, and
+   * the conversation is never compacted.
+   */
+  contextWindow?: number;
+  /** What to keep back for the answer. Defaults to the model's own limit. */
+  outputReserve?: number;
   /** The first backoff wait. Default 500ms. */
   retryDelayMs?: number;
   /** The longest backoff wait. Default 8s. */
   maxRetryDelayMs?: number;
 }
 
-export const DEFAULT_LIMITS: Required<AgentLimits> = {
+export const DEFAULT_LIMITS: Required<
+  Pick<
+    AgentLimits,
+    | "maxTurns"
+    | "maxRepeatedCalls"
+    | "maxRetries"
+    | "retryDelayMs"
+    | "maxRetryDelayMs"
+  >
+> = {
   maxTurns: 25,
   maxRepeatedCalls: 3,
   maxRetries: 3,
@@ -117,6 +147,10 @@ export type AgentEvent =
   | { t: "toolEnd"; call: ToolCall; output: string; isError?: boolean }
   /** The provider call failed and is being tried again. */
   | { t: "retry"; attempt: number; delayMs: number; reason: string }
+  /**
+   * The conversation was summarised because it no longer fit.
+   */
+  | { t: "compacted"; tokens: number; budget: number }
   /** The agent is done. */
   | { t: "done"; stop: StopReason; turns: number; usage: Usage; reason: LoopEnd };
 

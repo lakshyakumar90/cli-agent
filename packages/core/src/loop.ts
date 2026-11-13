@@ -24,6 +24,9 @@ import type {
 } from "@cli-agent/ai";
 import { validateArgs } from "@cli-agent/tools";
 import { buildContext, type Context } from "./context.js";
+import { budgetFor, estimateRequest, shouldCompact } from "./budget.js";
+import { compactMessages } from "./compact.js";
+import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
 import {
   DEFAULT_LIMITS,
@@ -52,7 +55,17 @@ export async function* run(
 ): AsyncGenerator<AgentEvent> {
   state.messages.push({ role: "user", content: input });
 
-  const limits: Required<AgentLimits> = {
+  const limits: Required<
+    Pick<
+      AgentLimits,
+      | "maxTurns"
+      | "maxRepeatedCalls"
+      | "maxRetries"
+      | "retryDelayMs"
+      | "maxRetryDelayMs"
+    >
+  > &
+    AgentLimits = {
     ...DEFAULT_LIMITS,
     ...state.limits,
   };
@@ -97,7 +110,51 @@ export async function* run(
       return;
     }
 
-    const ctx: Context = await buildContext(state);
+    let ctx: Context = await buildContext(state);
+
+    // Does the conversation still fit? If not, the old part of it is
+    // summarised and the turn goes on with the smaller conversation.
+    const budget = budgetFor({
+      provider: providerIdOf(state),
+      model: state.model,
+      ...(limits.contextWindow === undefined
+        ? {}
+        : { contextWindow: limits.contextWindow }),
+      ...(limits.outputReserve === undefined
+        ? {}
+        : { outputReserve: limits.outputReserve }),
+    });
+
+    if (budget.total !== undefined) {
+      const used = estimateRequest(ctx, state.tokens?.ratio ?? 1);
+      if (shouldCompact(used, budget)) {
+        // Be precise before anything is thrown away — but only when the
+        // decision is close. When the quick count is twice the threshold,
+        // the answer is the same either way, and the exact count would
+        // cost a second to load a tokenizer.
+        const precise =
+          used >= budget.total * budget.threshold * 2
+            ? used
+            : estimateRequest(ctx, state.tokens?.ratio ?? 1, { precise: true });
+
+        if (shouldCompact(precise, budget)) {
+          const compacted = await compactMessages({
+            provider: state.provider,
+            model: state.model,
+            messages: state.messages,
+            ...(budget.total === undefined ? {} : { budget: budget.total }),
+            signal,
+          });
+
+          if (compacted !== undefined) {
+            state.messages = compacted;
+            ctx = await buildContext(state);
+            yield { t: "compacted", tokens: precise, budget: budget.total };
+          }
+        }
+      }
+    }
+
     const turn: AssistantTurn = { role: "assistant", content: [] };
     turns += 1;
     let aborted = false;
@@ -124,6 +181,15 @@ export async function* run(
           stop = item.stop;
           usage = item.usage;
           turn.usage = item.usage;
+          // The provider says how many tokens it really used; the estimate is
+          // corrected with it.
+          state.tokens = {
+            ratio: correctRatio(
+              state.tokens?.ratio,
+              estimateRequest(ctx, state.tokens?.ratio ?? 1),
+              item.usage.inputTokens,
+            ),
+          };
           continue;
         }
         const emitted = accumulate(turn, item);
@@ -307,6 +373,12 @@ export async function execTool(
 }
 
 /** The result for a call that was never run, so the transcript stays valid. */
+/** The provider id of a "provider/model" ref. */
+function providerIdOf(state: AgentState): string {
+  const provider = state.provider.id;
+  return provider.length > 0 ? provider : "unknown";
+}
+
 function notRun(call: ToolCall, reason: LoopEnd): ToolResultMsg {
   const content =
     reason === "aborted"
@@ -327,4 +399,6 @@ function callSignature(call: ToolCall): string {
   }
   return `${call.name}:${args}`;
 }
+
+
 
