@@ -220,11 +220,20 @@ describe("abort", () => {
 
   it("marks a tool that was interrupted", async () => {
     const controller = new AbortController();
+
+    // The tool says when it has started, so the interrupt cannot land
+    // before there is anything to interrupt.
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
     const slow: Tool = {
       name: "slow",
       description: "Waits.",
       schema: z.object({}),
       async run(_args, ctx) {
+        markStarted();
         await new Promise((resolve, reject) => {
           const timer = setTimeout(resolve, 5_000);
           ctx.signal.addEventListener(
@@ -248,8 +257,7 @@ describe("abort", () => {
     const state = stateWith(provider, [slow]);
 
     const events = collect(run(state, "go", controller.signal));
-    // Give the tool a moment to start, then interrupt it.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await started;
     controller.abort();
 
     const collected = await events;
