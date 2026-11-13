@@ -14,7 +14,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@cli-agent/ai": "workspace:*"
+    "@cli-agent/ai": "workspace:*",
+    "ajv": "^8.20.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

@@ -29,7 +29,12 @@ export interface Tool {
   name: string;
   /** What it does, in the words the model reads. */
   description: string;
-  /** The arguments, as JSON Schema. */
+  /**
+   * The arguments, as JSON Schema.
+   *
+   * This is what the model is told, and what its arguments are checked
+   * against before the tool runs (see validate.ts).
+   */
   schema: JSONSchema;
   /** Runs the tool. */
   run(args: any, ctx: ToolContext): Promise<ToolResult>;

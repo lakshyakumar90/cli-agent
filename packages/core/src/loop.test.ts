@@ -289,5 +289,35 @@ describe("execTool", () => {
       content: "echo: hey",
     });
   });
+
+  it("refuses arguments that do not match the schema", async () => {
+    const provider = scriptedProvider([]);
+    const echo = echoTool();
+    const state = stateWith(provider, [echo]);
+
+    const result = await execTool(
+      { type: "toolCall", id: "c1", name: "echo", args: { text: 42 } },
+      state,
+      new AbortController().signal,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain("invalid arguments for echo");
+    // The tool never ran.
+    expect(echo.calls).toHaveLength(0);
+  });
+
+  it("tells the model what is wrong with the arguments", async () => {
+    const provider = scriptedProvider([]);
+    const state = stateWith(provider, [echoTool()]);
+
+    const result = await execTool(
+      { type: "toolCall", id: "c1", name: "echo", args: {} },
+      state,
+      new AbortController().signal,
+    );
+
+    expect(result.content).toContain('missing required property "text"');
+  });
 });
 

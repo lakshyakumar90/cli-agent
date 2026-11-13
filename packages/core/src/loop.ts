@@ -22,6 +22,7 @@ import type {
   ToolCall,
   Usage,
 } from "@cli-agent/ai";
+import { validateArgs } from "@cli-agent/tools";
 import { buildContext, type Context } from "./context.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
 import {
@@ -243,9 +244,11 @@ export function accumulate(
 /**
  * Run one tool call and turn it into the message that goes back to the model.
  *
- * A tool that is missing or throws does not stop the loop: the model is told
- * what went wrong and can try something else. A tool that was interrupted
- * says so, so the transcript stays valid.
+ * The arguments are checked against the tool's schema first: a call that
+ * does not match never runs. A tool that is missing, whose arguments do not
+ * fit, or that throws does not stop the loop — the model is told what went
+ * wrong and can try something else. A tool that was interrupted says so, so
+ * the transcript stays valid.
  */
 export async function execTool(
   call: ToolCall,
@@ -259,6 +262,17 @@ export async function execTool(
       role: "tool",
       callId: call.id,
       content: `unknown tool: ${call.name}`,
+      isError: true,
+    };
+  }
+
+  // The schema the model was given is the schema it is held to.
+  const validation = validateArgs(tool, call.args);
+  if (!validation.ok) {
+    return {
+      role: "tool",
+      callId: call.id,
+      content: validation.message,
       isError: true,
     };
   }
