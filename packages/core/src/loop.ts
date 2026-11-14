@@ -396,10 +396,6 @@ export async function execTool(
   }
 
   try {
-    // A file that is about to change is snapshotted first, so the change
-    // can be undone.
-    await snapshotBefore(state, tool, call);
-
     // A hook may stop the call before it happens.
     const before = await state.hooks?.run("PreToolUse", {
       tool: tool.name,
@@ -415,6 +411,10 @@ export async function execTool(
         isError: true,
       };
     }
+
+    // A file that is about to change is snapshotted first, so the change
+    // can be undone.
+    await snapshotBefore(state, tool, call);
 
     const result = await tool.run(call.args, {
       cwd: state.cwd ?? process.cwd(),
