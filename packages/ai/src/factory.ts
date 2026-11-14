@@ -23,6 +23,13 @@ export interface ProviderFactoryOptions {
   store?: AuthStore;
   /** Injection point for tests. Defaults to the global `fetch`. */
   fetch?: typeof globalThis.fetch;
+  /**
+   * Providers that an extension added, by id.
+   *
+   * They are looked at first: an extension that adds a provider is how a
+   * new backend gets in.
+   */
+  providers?: Map<string, Provider>;
 }
 
 /** The base URL of each provider that has one. */
@@ -43,7 +50,12 @@ export async function createProvider(
   id: string,
   options: ProviderFactoryOptions = {},
 ): Promise<Provider> {
-  const { env = process.env, store, fetch } = options;
+  const { env = process.env, store, fetch, providers } = options;
+
+  // A provider an extension added comes first.
+  const added = providers?.get(id);
+  if (added !== undefined) return added;
+
   const auth = new AuthManager({
     ...(store === undefined ? {} : { store }),
     env,

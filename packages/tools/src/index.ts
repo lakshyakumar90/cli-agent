@@ -1,5 +1,8 @@
 // @cli-agent/tools — the tool contract, and the six tools.
 
+// The zod the tools use, so an extension can use the same one.
+export { z } from "zod";
+
 export * from "./types.js";
 export * from "./validate.js";
 export * from "./permissions/index.js";

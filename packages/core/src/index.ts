@@ -24,6 +24,7 @@ export * from "./agents/task-tool.js";
 export * from "./agents/orchestrator.js";
 export * from "./hooks.js";
 export * from "./commands.js";
+export * from "./extensions.js";
 
 
 
