@@ -287,17 +287,22 @@ pnpm --filter @cli-agent/core eval
 ```
 
 ```
-✓ change a setting                 4 turns  1897 tokens  $0.0005
-✓ add a section to the readme       6 turns  1980 tokens  $0.0005
-✓ bump the version                 14 turns  2551 tokens  $0.0007
+✓ create a file                  5 turns  1573 tokens  $0.0000
+✓ fix a broken function          5 turns  1738 tokens  $0.0000
+✓ rename a function              6 turns  1854 tokens  $0.0000
+✓ delete a file                  4 turns  1354 tokens  $0.0000
 ...
-7/14 passed (50%)  49 turns  $0.0044  1600s
+14/14 passed (100%)  69 turns  $0.0000  287s
 ```
 
 The pass rate, the turns and the cost are what say whether the agent got
 better or cheaper — a change that makes it worse is visible. The suite is
 run without a model first, so the tasks, the tests and the runner are all
 proved to work.
+
+The model is the one `MYAGENT_EVAL_MODEL` names, and a free one is turned
+away now and then: a task that fails because the model was busy says so,
+and the report says which.
 
 ## The packages
 
