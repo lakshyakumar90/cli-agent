@@ -23,7 +23,9 @@ import {
   createState,
   createSkillTool,
   findSkills,
+  HookRunner,
   loadRoles,
+  readHooksConfig,
   SessionStore,
   Board,
   boardPath,
@@ -71,6 +73,8 @@ export interface SessionOptions {
   skills?: Skill[];
   /** The tools of the MCP servers, when they are already connected. */
   mcp?: McpTools;
+  /** The hooks, when they are already set up. */
+  hooks?: HookRunner;
 }
 
 export interface Session {
@@ -172,6 +176,11 @@ export async function createSession(
   // The tools of the MCP servers, if there are any.
   const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
 
+  // The hooks: the shell commands that run when things happen.
+  const hooks =
+    options.hooks ??
+    new HookRunner(await readHooksConfig(options.cwd), { cwd: options.cwd });
+
   const state = createState(provider, {
     model,
     tools: [...tools, task, skill, ...mcp.tools],
@@ -180,6 +189,7 @@ export async function createSession(
     journal: store,
     checkpoints: new CheckpointStore(),
     active: { skills },
+    hooks,
   });
 
   return {
