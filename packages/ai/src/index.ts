@@ -15,3 +15,4 @@ export * from "./providers/gemini.js";
 export * from "./providers/antigravity.js";
 export * from "./auth/index.js";
 export * from "./fake.js";
+export * from "./fixtures.js";

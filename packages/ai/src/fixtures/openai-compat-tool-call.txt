@@ -1,0 +1,4 @@
+data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"path\":\"a.ts\"}","name":"read"},"id":"function-call-9119613445029036457","type":"function"}]},"finish_reason":"tool_calls","index":0}],"created":1794664510,"id":"PWj4aoCsF_bLqfkP34zn4Ag","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":{"completion_tokens":15,"prompt_tokens":55,"total_tokens":127}}
+
+data: [DONE]
+
