@@ -17,6 +17,7 @@ import type { Provider } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
 import { z } from "zod";
 import { run } from "../loop.js";
+import { costOf } from "../budget.js";
 import { createState, type AgentState } from "../types.js";
 import { Board } from "./board.js";
 import {
@@ -49,6 +50,8 @@ export interface TaskToolOptions {
   timeoutMs?: number;
   /** The tokens one worker may use. */
   tokenBudget?: number;
+  /** The US dollars one worker may spend. */
+  costBudget?: number;
   /** Gives a writing worker a worktree of its own. Default true. */
   isolate?: boolean;
   /** How deep the parent is. */
@@ -68,6 +71,7 @@ export function createTaskTool(options: TaskToolOptions): Tool {
     maxDepth = 1,
     timeoutMs = 10 * 60_000,
     tokenBudget,
+    costBudget,
     isolate = true,
     depth = 0,
   } = options;
@@ -164,12 +168,17 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           system: role.prompt,
           cwd: worktree?.path ?? cwd,
           depth: depth + 1,
-          ...(tokenBudget === undefined ? {} : { limits: { tokenBudget } }),
+          limits: {
+            ...(tokenBudget === undefined ? {} : { tokenBudget }),
+            ...(costBudget === undefined ? {} : { costBudget }),
+          },
         });
 
         // The report is all that comes back.
         let report = "";
         let tokens = 0;
+        let cost = 0;
+        let reason: string | undefined;
 
         const timeout = AbortSignal.timeout(timeoutMs);
         const signal = AbortSignal.any([timeout, ctx.signal]);
@@ -183,6 +192,8 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           }
           if (event.t === "done") {
             tokens += event.usage.inputTokens + event.usage.outputTokens;
+            cost += costOf(providerIdOf(model), model, event.usage);
+            reason = event.reason;
           }
         }
 
@@ -190,6 +201,7 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           status: "done",
           result: report,
           tokens,
+          cost,
           ...(worktree === undefined ? {} : { branch: worktree.branch }),
         });
         await board?.save();
@@ -199,6 +211,10 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           notes.push(`the work is on the branch ${worktree.branch}`);
         }
         if (tokens > 0) notes.push(`it used ${tokens} tokens`);
+        if (cost > 0) notes.push(`it cost $${cost.toFixed(4)}`);
+        if (reason === "budget-exhausted") {
+          notes.push("it ran out of budget");
+        }
 
         return {
           output:
@@ -219,6 +235,12 @@ export function createTaskTool(options: TaskToolOptions): Tool {
   };
 
   return taskTool;
+}
+
+/** The provider id of a "provider/model" ref. */
+function providerIdOf(ref: string): string {
+  const slash = ref.indexOf("/");
+  return slash > 0 ? ref.slice(0, slash) : ref;
 }
 
 /** Merge the branch of a worker that wrote something. */

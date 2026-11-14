@@ -31,6 +31,8 @@ export interface BoardTask {
   error?: string;
   /** The tokens it used. */
   tokens?: number;
+  /** What it cost, in US dollars. */
+  cost?: number;
   /** The branch it worked on, when it had one. */
   branch?: string;
   /** When it was added. */

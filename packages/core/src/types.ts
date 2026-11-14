@@ -128,6 +128,11 @@ export interface AgentLimits {
    */
   tokenBudget?: number;
   /**
+   * The US dollars the agent may spend in one prompt. When it is used up,
+   * the loop stops with `"budget-exhausted"`.
+   */
+  costBudget?: number;
+  /**
    * How many turns a tool result stays readable. An older one is replaced by
    * a one-line stub. Default 3.
    */

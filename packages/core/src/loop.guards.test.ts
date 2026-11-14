@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProviderError, type StreamRequest } from "@cli-agent/ai";
+import { ProviderError, type Provider, type StreamRequest } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
 import { z } from "zod";
 import { INTERRUPTED, run } from "./loop.js";
@@ -195,6 +195,67 @@ describe("loop guards", () => {
     });
     // The second turn never happened.
     expect(provider.requests).toHaveLength(1);
+  });
+
+  it("stops when the cost budget is used up", async () => {
+    // Gemini 4 Carbon costs 2 dollars a million input tokens.
+    const requests: StreamRequest[] = [];
+    const provider: Provider = {
+      id: "gemini",
+      models: async () => [],
+      async *stream(request: StreamRequest) {
+        requests.push(request);
+        yield {
+          t: "toolCall",
+          call: {
+            type: "toolCall",
+            id: "call-1",
+            name: "echo",
+            args: { text: "ping" },
+          },
+        };
+        yield {
+          t: "done",
+          usage: { inputTokens: 1_000_000, outputTokens: 0 },
+          stop: "tool",
+        };
+      },
+    };
+    const state = stateWith(provider, [echoTool()], {
+      model: "gemini-4-carbon",
+      limits: { costBudget: 1 },
+    });
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // The turn cost 2 dollars, over the budget of 1.
+    expect(events.at(-1)).toMatchObject({
+      t: "done",
+      reason: "budget-exhausted",
+      turns: 1,
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("does not stop on a model without a price", async () => {
+    const provider = scriptedProvider([
+      { calls: [{ id: "call-1", name: "echo", args: { text: "ping" } }] },
+      { text: "done" },
+    ]);
+    const state = stateWith(provider, [echoTool()], {
+      limits: { costBudget: 0.0001 },
+    });
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // The model is not in the table, so it has no price: the budget does
+    // not apply, and the turn runs to the end.
+    expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
+    expect(provider.requests).toHaveLength(2);
   });
 });
 

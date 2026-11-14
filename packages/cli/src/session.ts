@@ -57,6 +57,8 @@ export interface SessionOptions {
   board?: Board;
   /** The tokens one worker may use. */
   workerTokenBudget?: number;
+  /** The US dollars one worker may spend. */
+  workerCostBudget?: number;
 }
 
 export interface Session {
@@ -141,6 +143,9 @@ export async function createSession(
     ...(options.workerTokenBudget === undefined
       ? {}
       : { tokenBudget: options.workerTokenBudget }),
+    ...(options.workerCostBudget === undefined
+      ? {}
+      : { costBudget: options.workerCostBudget }),
   });
 
   const state = createState(provider, {

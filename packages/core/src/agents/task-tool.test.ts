@@ -259,5 +259,87 @@ describe("the task tool", () => {
 
     expect(peak).toBeLessThanOrEqual(2);
   });
+
+  it("gives the worker a token budget of its own", async () => {
+    let turns = 0;
+
+    const provider: Provider = {
+      id: "test",
+      models: async () => [],
+      async *stream(): AsyncGenerator<Event> {
+        turns += 1;
+        // The worker asks for a tool, so the loop wants another turn.
+        yield {
+          t: "toolCall",
+          call: {
+            type: "toolCall",
+            id: `call-${turns}`,
+            name: "read",
+            args: { path: "a.txt" },
+          },
+        };
+        yield {
+          t: "done",
+          usage: { inputTokens: 100, outputTokens: 50 },
+          stop: "tool",
+        };
+      },
+    };
+
+    const task = createTaskTool({
+      roles: new Map([["explorer", role()]]),
+      providerFor: async () => provider,
+      defaultModel: "test/lead",
+      tools: [readTool],
+      cwd: workspace,
+      tokenBudget: 100,
+    });
+
+    const result = await task.run(
+      { agent: "explorer", prompt: "go" },
+      { cwd: workspace, signal: new AbortController().signal },
+    );
+
+    // The worker used 150 tokens, over the budget of 100: it got one turn
+    // and no more.
+    expect(turns).toBe(1);
+    expect(result.output).toContain("ran out of budget");
+  });
+
+  it("writes what the worker cost on the board", async () => {
+    // Gemini 4 Carbon costs 2 dollars a million input tokens.
+    const provider: Provider = {
+      id: "gemini",
+      models: async () => [],
+      async *stream(): AsyncGenerator<Event> {
+        yield { t: "text", delta: "the report" };
+        yield {
+          t: "done",
+          usage: { inputTokens: 1_000_000, outputTokens: 0 },
+          stop: "end",
+        };
+      },
+    };
+
+    const board = new Board();
+    const task = createTaskTool({
+      roles: new Map([
+        ["explorer", role({ model: "gemini/gemini-4-carbon" })],
+      ]),
+      providerFor: async () => provider,
+      defaultModel: "test/lead",
+      tools: [readTool],
+      cwd: workspace,
+      board,
+    });
+
+    await task.run(
+      { agent: "explorer", prompt: "go" },
+      { cwd: workspace, signal: new AbortController().signal },
+    );
+
+    const task1 = board.list()[0];
+    expect(task1?.cost).toBeCloseTo(2, 5);
+  });
 });
 

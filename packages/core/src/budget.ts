@@ -5,7 +5,7 @@
  * it has to be made smaller.
  */
 
-import { lookupModel } from "@cli-agent/ai";
+import { estimateCost, lookupModel, type Usage } from "@cli-agent/ai";
 import type { Context } from "./context.js";
 import { countTokens, countTokensWithTokenizer } from "./tokens.js";
 
@@ -71,6 +71,22 @@ export function budgetFor(options: BudgetOptions): Budget {
 export function shouldCompact(used: number, budget: Budget): boolean {
   if (budget.total === undefined || budget.total <= 0) return false;
   return used >= budget.total * budget.threshold;
+}
+
+/**
+ * What one turn costs, in US dollars.
+ *
+ * A model the table does not know has no price, so its cost is zero: a
+ * budget on such a model counts the tokens, not the money.
+ */
+export function costOf(
+  provider: string,
+  model: string,
+  usage: Usage,
+): number {
+  const info = lookupModel(provider, model);
+  if (info === undefined) return 0;
+  return estimateCost(usage, info) ?? 0;
 }
 
 /**

@@ -25,7 +25,12 @@ import type {
 } from "@cli-agent/ai";
 import { resolvePath, validateArgs, type Tool } from "@cli-agent/tools";
 import { buildContext, type Context } from "./context.js";
-import { budgetFor, estimateRequest, shouldCompact } from "./budget.js";
+import {
+  budgetFor,
+  costOf,
+  estimateRequest,
+  shouldCompact,
+} from "./budget.js";
 import { compactMessages } from "./compact.js";
 import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
@@ -80,6 +85,7 @@ export async function* run(
   let turns = 0;
   let toolsExecuted = 0;
   let tokensUsed = 0;
+  let costUsed = 0;
   let stop: StopReason = "end";
   let usage: Usage = { inputTokens: 0, outputTokens: 0 };
   // Calls of the last turn that have no answer yet.
@@ -118,6 +124,10 @@ export async function* run(
       limits.tokenBudget !== undefined &&
       tokensUsed >= limits.tokenBudget
     ) {
+      yield* finish("budget-exhausted");
+      return;
+    }
+    if (limits.costBudget !== undefined && costUsed >= limits.costBudget) {
       yield* finish("budget-exhausted");
       return;
     }
@@ -200,6 +210,7 @@ export async function* run(
           usage = item.usage;
           turn.usage = item.usage;
           tokensUsed += item.usage.inputTokens + item.usage.outputTokens;
+          costUsed += costOf(providerIdOf(state), state.model, item.usage);
           // The correction from the real usage.
           state.tokens = {
             ratio: correctRatio(
@@ -408,7 +419,6 @@ export async function execTool(
   }
 }
 
-/** The result for a call that was never run, so the transcript stays valid. */
 /** The provider id of a "provider/model" ref. */
 function providerIdOf(state: AgentState): string {
   const provider = state.provider.id;
