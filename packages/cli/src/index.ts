@@ -60,75 +60,97 @@ async function main(): Promise<number> {
 
   const { state, store, sessionId, roles, commands } = built;
 
-  switch (options.mode) {
-    case "print":
-      return runPrint({
-        state,
-        prompt: options.prompt ?? "",
-        streams: { out: process.stdout, err: process.stderr },
-        signal: session.signal,
-        verbose: options.verbose,
-      });
+  // What could not be loaded is said out loud: a server that did not
+  // answer, an extension that did not load. The agent carries on without
+  // them, but the user should know.
+  for (const problem of built.mcp.problems) {
+    process.stderr.write(
+      `the MCP server "${problem.server}" did not answer: ${problem.message}\n`,
+    );
+  }
+  for (const problem of built.extensions.problems) {
+    process.stderr.write(
+      `the extension ${problem.path} did not load: ${problem.message}\n`,
+    );
+  }
 
-    case "json":
-      return runJson({
-        state,
-        prompt: options.prompt ?? "",
-        streams: { out: process.stdout, err: process.stderr },
-        signal: session.signal,
-      });
+  // The session is shut down however it ends: the MCP servers are
+  // processes of their own, and they have to be stopped or the agent
+  // never finishes.
+  try {
+    switch (options.mode) {
+      case "print":
+        return await runPrint({
+          state,
+          prompt: options.prompt ?? "",
+          streams: { out: process.stdout, err: process.stderr },
+          signal: session.signal,
+          verbose: options.verbose,
+        });
 
-    case "rpc":
-      return runRpc({
-        state,
-        streams: { out: process.stdout, err: process.stderr },
-        requests: readLines(),
-        signal: session.signal,
-      });
+      case "json":
+        return await runJson({
+          state,
+          prompt: options.prompt ?? "",
+          streams: { out: process.stdout, err: process.stderr },
+          signal: session.signal,
+        });
 
-    case "interactive":
-    default: {
-      const ui = new InteractiveUi({
-        state,
-        out: process.stdout,
-        err: process.stderr,
-        input,
-        model: options.model,
-        permissionMode: options.permissionMode,
-        cwd: options.cwd,
-        sessionId,
-        store,
-        checkpoints: state.checkpoints,
-        agents: await loadAgents(),
-        roles,
-        commands,
-        onModel: async (ref) => {
-          try {
-            // A provider an extension added is a provider too.
-            const provider = await createProvider(ref.split("/")[0] as string, {
-              providers: built.extensions.providers,
-            });
-            return provider;
-          } catch (error) {
-            process.stderr.write(
-              `${error instanceof Error ? error.message : String(error)}\n`,
-            );
-            return undefined;
-          }
-        },
-        onLogin: async (provider) => {
-          const auth = new AuthManager();
-          try {
-            await auth.login(provider);
-            return `signed in to ${provider}`;
-          } catch (error) {
-            return error instanceof Error ? error.message : String(error);
-          }
-        },
-      });
+      case "rpc":
+        return await runRpc({
+          state,
+          streams: { out: process.stdout, err: process.stderr },
+          requests: readLines(),
+          signal: session.signal,
+        });
 
-      return ui.run();
+      case "interactive":
+      default: {
+        const ui = new InteractiveUi({
+          state,
+          out: process.stdout,
+          err: process.stderr,
+          input,
+          model: options.model,
+          permissionMode: options.permissionMode,
+          cwd: options.cwd,
+          sessionId,
+          store,
+          checkpoints: state.checkpoints,
+          agents: await loadAgents(),
+          roles,
+          commands,
+          onModel: async (ref) => {
+            try {
+              // A provider an extension added is a provider too.
+              const provider = await createProvider(
+                ref.split("/")[0] as string,
+                { providers: built.extensions.providers },
+              );
+              return provider;
+            } catch (error) {
+              process.stderr.write(
+                `${error instanceof Error ? error.message : String(error)}\n`,
+              );
+              return undefined;
+            }
+          },
+          onLogin: async (provider) => {
+            const auth = new AuthManager();
+            try {
+              await auth.login(provider);
+              return `signed in to ${provider}`;
+            } catch (error) {
+              return error instanceof Error ? error.message : String(error);
+            }
+          },
+        });
+
+        return await ui.run();
+      }
     }
+  } finally {
+    await built.close();
   }
 }
 

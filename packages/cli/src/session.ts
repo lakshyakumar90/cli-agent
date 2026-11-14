@@ -108,6 +108,13 @@ export interface Session {
   commands: Command[];
   /** What the extensions added. */
   extensions: LoadedExtensions;
+  /**
+   * Shut the session down.
+   *
+   * The MCP servers are processes of their own: they have to be stopped,
+   * or the agent never finishes.
+   */
+  close(): Promise<void>;
 }
 
 /** The provider id of a "provider/model" ref. */
@@ -241,5 +248,14 @@ export async function createSession(
     mcp,
     commands,
     extensions,
+    async close() {
+      // The servers are processes: they have to be stopped, or the agent
+      // never finishes.
+      await Promise.all(
+        mcp.servers.map((server) =>
+          server.close().catch(() => undefined),
+        ),
+      );
+    },
   };
 }
