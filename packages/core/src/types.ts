@@ -12,6 +12,7 @@ import type {
 } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
 import type { ActiveContext } from "./skills.js";
+import type { CheckpointStore } from "./checkpoints.js";
 
 /**
  * One assistant turn, while it is being built.
@@ -56,6 +57,9 @@ export interface AgentState {
   limits?: AgentLimits;
   /** The skills, the plan and the checklist: the dynamic layer. */
   active?: ActiveContext;
+
+  /** The snapshots that make an edit undoable. */
+  checkpoints?: CheckpointStore;
   /** How far off the token estimate was, so the next one is closer. */
   tokens?: TokenCalibration;
 }
@@ -179,6 +183,8 @@ export function createState(
     limits?: AgentLimits;
     /** The skills, the plan and the checklist: the dynamic layer. */
     active?: ActiveContext;
+    /** The snapshots that make an edit undoable. */
+    checkpoints?: CheckpointStore;
   },
 ): AgentState {
   return {
@@ -190,5 +196,9 @@ export function createState(
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     ...(options.limits === undefined ? {} : { limits: options.limits }),
     ...(options.active === undefined ? {} : { active: options.active }),
+    ...(options.checkpoints === undefined
+      ? {}
+      : { checkpoints: options.checkpoints }),
   };
 }
+

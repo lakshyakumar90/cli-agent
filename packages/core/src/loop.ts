@@ -18,11 +18,12 @@
 
 import type {
   Event,
+  Msg,
   StopReason,
   ToolCall,
   Usage,
 } from "@cli-agent/ai";
-import { validateArgs } from "@cli-agent/tools";
+import { resolvePath, validateArgs, type Tool } from "@cli-agent/tools";
 import { buildContext, type Context } from "./context.js";
 import { budgetFor, estimateRequest, shouldCompact } from "./budget.js";
 import { compactMessages } from "./compact.js";
@@ -54,7 +55,8 @@ export async function* run(
   input: string,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  state.messages.push({ role: "user", content: input });
+  const userMessage: Msg = { role: "user", content: input };
+  state.messages.push(userMessage);
 
   const limits: Required<
     Pick<
@@ -345,6 +347,10 @@ export async function execTool(
   }
 
   try {
+    // A file that is about to change is snapshotted first, so the change
+    // can be undone.
+    await snapshotBefore(state, tool, call);
+
     const result = await tool.run(call.args, {
       cwd: state.cwd ?? process.cwd(),
       signal,
@@ -389,6 +395,29 @@ function providerIdOf(state: AgentState): string {
   return provider.length > 0 ? provider : "unknown";
 }
 
+/**
+ * Snapshot the file a tool is about to change.
+ *
+ * Only the tools that change files are snapshotted, and only the file they
+ * name: the tool knows the path, the loop does not have to guess.
+ */
+async function snapshotBefore(
+  state: AgentState,
+  tool: Tool,
+  call: ToolCall,
+): Promise<void> {
+  const checkpoints = state.checkpoints;
+  if (checkpoints === undefined) return;
+  if (tool.effect !== "write") return;
+
+  const args = call.args as { path?: unknown } | undefined;
+  const path = args?.path;
+  if (typeof path !== "string" || path.length === 0) return;
+
+  const resolved = resolvePath(state.cwd ?? process.cwd(), path);
+  await checkpoints.snapshot(call.id, resolved);
+}
+
 function notRun(call: ToolCall, reason: LoopEnd): ToolResultMsg {
   const content =
     reason === "aborted"
@@ -409,6 +438,8 @@ function callSignature(call: ToolCall): string {
   }
   return `${call.name}:${args}`;
 }
+
+
 
 
 

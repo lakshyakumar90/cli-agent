@@ -13,10 +13,12 @@ export * from "./shrink.js";
 export * from "./shrink.js";
 export * from "./repomap.js";
 export * from "./sessions.js";
+export * from "./checkpoints.js";
 export * from "./retry.js";
 export * from "./loop.js";
 export * from "./render.js";
 export * from "./subagent.js";
+
 
 
 
