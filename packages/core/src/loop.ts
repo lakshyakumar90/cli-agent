@@ -295,9 +295,11 @@ export async function* run(
 
     // The tools of one turn run together; their results go back in the order
     // the model asked for them.
-    const results = await Promise.all(
-      calls.map((call) => execTool(call, state, signal)),
-    );
+    //
+    // The tools that only read run together. The ones that change
+    // something run one after another: two changes to the same file must
+    // not race, or one of them is lost.
+    const results = await runCalls(calls, state, signal);
     toolsExecuted += calls.length;
 
     for (const [index, call] of calls.entries()) {
@@ -380,6 +382,58 @@ export function accumulate(
       return { t: "toolStart", call: event.call };
     }
   }
+}
+
+/**
+ * Run the calls of one turn.
+ *
+ * The calls that only read run together, and the ones that change
+ * something run one after another. The order the model asked for is
+ * kept: a read that comes after a write sees what the write did.
+ */
+async function runCalls(
+  calls: ToolCall[],
+  state: AgentState,
+  signal: AbortSignal,
+): Promise<ToolResultMsg[]> {
+  const results: ToolResultMsg[] = new Array(calls.length);
+
+  let index = 0;
+  while (index < calls.length) {
+    const tool = state.tools.find(
+      (candidate) => candidate.name === calls[index]?.name,
+    );
+
+    if (tool?.effect === "read") {
+      // A run of reads, together.
+      const run: number[] = [];
+      while (index < calls.length) {
+        const next = state.tools.find(
+          (candidate) => candidate.name === calls[index]?.name,
+        );
+        if (next?.effect !== "read") break;
+        run.push(index);
+        index += 1;
+      }
+
+      const done = await Promise.all(
+        run.map((at) => execTool(calls[at] as ToolCall, state, signal)),
+      );
+      for (const [position, original] of run.entries()) {
+        results[original] = done[position] as ToolResultMsg;
+      }
+      continue;
+    }
+
+    // A change, on its own.
+    const call = calls[index];
+    if (call !== undefined) {
+      results[index] = await execTool(call, state, signal);
+    }
+    index += 1;
+  }
+
+  return results;
 }
 
 /**
