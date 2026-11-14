@@ -27,6 +27,7 @@ export * from "./commands.js";
 export * from "./extensions.js";
 export * from "./redact.js";
 export * from "./logging.js";
+export * from "./untrusted.js";
 
 
 

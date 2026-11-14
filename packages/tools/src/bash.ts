@@ -133,6 +133,9 @@ export function createBashTool(options: BashOptions = {}): Tool {
   return defineTool({
     name: "bash",
     effect: "execute",
+    // What a command prints may be anything, a page from the web among
+    // it: data, not instructions.
+    content: "untrusted",
     description:
       "Run a shell command and return its output. Long commands are stopped; very long output is shortened.",
     schema: z.object({

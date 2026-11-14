@@ -61,6 +61,15 @@ export interface Tool {
    */
   effect?: "read" | "write" | "execute";
   /**
+   * What the result holds.
+   *
+   * "untrusted" means the result is data - the contents of a file, a page
+   * from the web, the output of a command - and not instructions from the
+   * user. The agent marks it, so the model can tell the difference
+   * between what the user asked for and what it read.
+   */
+  content?: "trusted" | "untrusted";
+  /**
    * The most characters this tool's result may have.
    *
    * A tool that returns something the model must read whole says so, and
@@ -89,6 +98,7 @@ export function defineTool<S extends ZodType>(definition: {
   description: string;
   schema: S;
   effect?: "read" | "write" | "execute";
+  content?: "trusted" | "untrusted";
   run(args: z.infer<S>, ctx: ToolContext): Promise<ToolResult>;
   needsApproval?(args: z.infer<S>): boolean;
 }): Tool {

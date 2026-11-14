@@ -30,6 +30,9 @@ export function createGrepTool(options: GrepOptions = {}): Tool {
   return defineTool({
     name: "grep",
     effect: "read",
+    // The lines that were found are the contents of a file: data, not
+    // instructions.
+    content: "untrusted",
     description:
       "Search the files for a pattern. The output is file:line:text for every match. Files git ignores are skipped.",
     schema: z.object({

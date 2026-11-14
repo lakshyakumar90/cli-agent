@@ -36,6 +36,7 @@ import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
 import { blockReason } from "./hooks.js";
 import { shrinkText, DEFAULT_MAX_CHARS, DEFAULT_MAX_LINES } from "./shrink.js";
+import { frameUntrusted } from "./untrusted.js";
 import {
   DEFAULT_LIMITS,
   type AgentEvent,
@@ -478,21 +479,23 @@ export async function execTool(
       outputChars: result.output.length,
     });
 
+    const content = shrinkText(
+      note.length > 0 ? `${result.output}\n\n${note}` : result.output,
+      {
+        maxLines:
+          tool.maxLines ?? state.limits?.maxToolLines ?? DEFAULT_MAX_LINES,
+        maxChars:
+          tool.maxChars ?? state.limits?.maxToolChars ?? DEFAULT_MAX_CHARS,
+      },
+    );
+
     return {
       role: "tool",
       callId: call.id,
-      // A tool can say a great deal; the model rarely needs all of it, and
-      // the context is smaller for the rest of the session. A tool that
-      // returns something the model must read whole sets its own limit.
-      content: shrinkText(
-        note.length > 0 ? `${result.output}\n\n${note}` : result.output,
-        {
-          maxLines:
-            tool.maxLines ?? state.limits?.maxToolLines ?? DEFAULT_MAX_LINES,
-          maxChars:
-            tool.maxChars ?? state.limits?.maxToolChars ?? DEFAULT_MAX_CHARS,
-        },
-      ),
+      // What the tool holds is data, not instructions: a file may say what
+      // to do, and it is not the user talking.
+      content:
+        tool.content === "untrusted" ? frameUntrusted(content) : content,
       ...(result.isError === true ? { isError: true } : {}),
       ...(result.keep === true ? { keep: true } : {}),
     };

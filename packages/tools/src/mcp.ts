@@ -344,6 +344,9 @@ export function toTool(
     schema,
     // A server can do anything, so the careful answer is that it writes.
     effect: "write",
+    // What a server sends is data: a page from the web, a document, the
+    // output of somebody else's program.
+    content: "untrusted",
     async run(args: any, ctx) {
       const result = await client.callTool(
         { name: tool.name, arguments: args ?? {} },

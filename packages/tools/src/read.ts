@@ -28,6 +28,9 @@ export function createReadTool(options: ReadOptions = {}): Tool {
   return defineTool({
     name: "read",
     effect: "read",
+    // The contents of a file are data: a file may say what to do, and it
+    // is not the user talking.
+    content: "untrusted",
     description:
       "Read a file. Shows every line with its number. Use offset and limit to read part of a big file.",
     schema: z.object({
