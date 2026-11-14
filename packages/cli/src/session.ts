@@ -21,6 +21,8 @@ import {
 import {
   CheckpointStore,
   createState,
+  createSkillTool,
+  findSkills,
   loadRoles,
   SessionStore,
   Board,
@@ -28,7 +30,13 @@ import {
   createTaskTool,
   type AgentState,
   type AgentRole,
+  type Skill,
 } from "@cli-agent/core";
+import {
+  loadMcpTools,
+  readMcpConfig,
+  type McpTools,
+} from "@cli-agent/tools";
 
 export interface SessionOptions {
   /** The "provider/model" ref. */
@@ -59,6 +67,10 @@ export interface SessionOptions {
   workerTokenBudget?: number;
   /** The US dollars one worker may spend. */
   workerCostBudget?: number;
+  /** The skills that are available. */
+  skills?: Skill[];
+  /** The tools of the MCP servers, when they are already connected. */
+  mcp?: McpTools;
 }
 
 export interface Session {
@@ -76,6 +88,10 @@ export interface Session {
   roles: Map<string, AgentRole>;
   /** The board the tasks are written to. */
   board: Board;
+  /** The skills that are available. */
+  skills: Skill[];
+  /** The MCP servers that answered, and the ones that did not. */
+  mcp: McpTools;
 }
 
 /** The provider id of a "provider/model" ref. */
@@ -148,14 +164,33 @@ export async function createSession(
       : { costBudget: options.workerCostBudget }),
   });
 
+  // The skills: only their names and descriptions go into the prompt, and
+  // the body is loaded when the model asks for it.
+  const skills = options.skills ?? (await findSkills(options.cwd));
+  const skill = createSkillTool({ cwd: options.cwd, skills });
+
+  // The tools of the MCP servers, if there are any.
+  const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
+
   const state = createState(provider, {
     model,
-    tools: [...tools, task],
+    tools: [...tools, task, skill, ...mcp.tools],
     messages,
     cwd: options.cwd,
     journal: store,
     checkpoints: new CheckpointStore(),
+    active: { skills },
   });
 
-  return { provider, tools: state.tools, state, store, sessionId, roles, board };
+  return {
+    provider,
+    tools: state.tools,
+    state,
+    store,
+    sessionId,
+    roles,
+    board,
+    skills,
+    mcp,
+  };
 }
