@@ -1,0 +1,3 @@
+# The recorded streams are the bytes the vendors sent, line endings and
+# all. Git must not tidy them up.
+packages/ai/src/fixtures/*.txt -text
