@@ -34,7 +34,7 @@ import {
 import { compactMessages } from "./compact.js";
 import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
-import { shrinkText } from "./shrink.js";
+import { shrinkText, DEFAULT_MAX_CHARS, DEFAULT_MAX_LINES } from "./shrink.js";
 import {
   DEFAULT_LIMITS,
   type AgentEvent,
@@ -390,16 +390,14 @@ export async function execTool(
       role: "tool",
       callId: call.id,
       // A tool can say a great deal; the model rarely needs all of it, and
-      // the context is smaller for the rest of the session.
+      // the context is smaller for the rest of the session. A tool that
+      // returns something the model must read whole sets its own limit.
       content: shrinkText(result.output, {
-        ...(state.limits?.maxToolLines === undefined
-          ? {}
-          : { maxLines: state.limits.maxToolLines }),
-        ...(state.limits?.maxToolChars === undefined
-          ? {}
-          : { maxChars: state.limits.maxToolChars }),
+        maxLines: tool.maxLines ?? state.limits?.maxToolLines ?? DEFAULT_MAX_LINES,
+        maxChars: tool.maxChars ?? state.limits?.maxToolChars ?? DEFAULT_MAX_CHARS,
       }),
       ...(result.isError === true ? { isError: true } : {}),
+      ...(result.keep === true ? { keep: true } : {}),
     };
   } catch (error) {
     if (isAbort(error, signal)) {

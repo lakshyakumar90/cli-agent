@@ -135,7 +135,19 @@ export type ToolCall = Extract<Block, { type: "toolCall" }>;
 export type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: Block[]; usage?: Usage }
-  | { role: "tool"; callId: string; content: string; isError?: boolean };
+  | {
+      role: "tool";
+      callId: string;
+      content: string;
+      isError?: boolean;
+      /**
+       * Keep this result in the context.
+       *
+       * A skill's instructions are still needed long after the tool that
+       * loaded them has been forgotten.
+       */
+      keep?: boolean;
+    };
 
 /** Why the model stopped generating. */
 export type StopReason = "end" | "tool" | "length";

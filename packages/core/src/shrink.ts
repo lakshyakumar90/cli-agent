@@ -96,6 +96,8 @@ export function stubOldToolResults(
   return messages.map((message, index) => {
     if (message.role !== "tool") return message;
     if ((ages[index] as number) <= keepTurns) return message;
+    // A result the model must keep reading stays.
+    if (message.keep === true) return message;
 
     return {
       role: "tool",

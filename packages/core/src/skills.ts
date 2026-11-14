@@ -9,6 +9,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
+import type { Tool } from "@cli-agent/tools";
+import { z } from "zod";
 
 /** Where skills are looked for, in the working directory and in the home. */
 export const SKILL_DIRECTORIES = [
@@ -120,4 +122,88 @@ export function displaySkillPath(cwd: string, path: string): string {
   const relativePath = relative(cwd, path);
   if (relativePath.length === 0 || relativePath.startsWith("..")) return path;
   return relativePath.split(sep).join("/");
+}
+
+/**
+ * The body of a skill: what is left when the frontmatter is taken off.
+ *
+ * The frontmatter is ours - the name, the description - so the model is
+ * given what is left: the instructions.
+ */
+export async function readSkillBody(path: string): Promise<string> {
+  let content: string;
+  try {
+    content = await readFile(path, "utf8");
+  } catch {
+    return "";
+  }
+
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content);
+  if (frontmatter === null) return content.trim();
+
+  return content.slice(frontmatter[0].length).trim();
+}
+
+export interface SkillToolOptions {
+  /** The directory the skills are in. */
+  cwd: string;
+  /** The skills that are known. They are looked up when this is left out. */
+  skills?: Skill[];
+}
+
+/**
+ * The tool the model calls to load a skill.
+ *
+ * Only the name and the description of a skill are in the prompt: the
+ * body can be long, and most of it is not needed unless the task calls
+ * for it. So the model asks for the one it wants, and the body arrives
+ * then - and stays, because the instructions are still needed later.
+ */
+export function createSkillTool(options: SkillToolOptions): Tool {
+  return {
+    name: "skill",
+    description: [
+      "Load a skill: the full instructions for a kind of task.",
+      "",
+      "The prompt lists the skills that are available, with what each one",
+      "is for. When one of them fits the task, load it and follow it.",
+    ].join("\n"),
+    effect: "read",
+    schema: z.object({
+      name: z.string().describe("The name of the skill to load."),
+    }),
+    // The instructions must arrive whole: the middle of them is as
+    // important as the beginning.
+    maxChars: 40_000,
+    maxLines: 2_000,
+    async run(args: { name: string }) {
+      const skills = options.skills ?? (await findSkills(options.cwd));
+      const skill = skills.find((candidate) => candidate.name === args.name);
+
+      if (skill === undefined) {
+        const known = skills.map((candidate) => candidate.name).join(", ");
+        return {
+          output: `there is no skill called "${args.name}"${
+            known.length > 0 ? ` — known: ${known}` : ""
+          }`,
+          isError: true,
+        };
+      }
+
+      const body = await readSkillBody(skill.path);
+      if (body.length === 0) {
+        return {
+          output: `the skill "${skill.name}" is empty`,
+          isError: true,
+        };
+      }
+
+      return {
+        output: body,
+        // The instructions stay in the context: they are needed long after
+        // this call is forgotten.
+        keep: true,
+      };
+    },
+  };
 }

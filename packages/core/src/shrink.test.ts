@@ -99,4 +99,22 @@ describe("the old tool results", () => {
   it("has a default of three turns", () => {
     expect(DEFAULT_KEEP_TURNS).toBe(3);
   });
+
+  it("keeps a result that says it must be kept", () => {
+    const withKept: Msg[] = [
+      { role: "assistant", content: [] },
+      {
+        role: "tool",
+        callId: "c1",
+        content: "the instructions of the skill",
+        keep: true,
+      },
+      { role: "assistant", content: [] },
+    ];
+
+    const sent = stubOldToolResults(withKept, { keepTurns: 0 });
+
+    // The instructions are still needed long after the call is forgotten.
+    expect(textOf(sent[1] as Msg)).toBe("the instructions of the skill");
+  });
 });

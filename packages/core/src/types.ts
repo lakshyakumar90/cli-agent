@@ -32,6 +32,13 @@ export interface ToolResultMsg {
   callId: string;
   content: string;
   isError?: boolean;
+  /**
+   * Keep this result in the context.
+   *
+   * A tool whose result the model must keep reading says so: the result is
+   * not replaced by a stub when the turn gets old.
+   */
+  keep?: boolean;
 }
 
 /**

@@ -33,6 +33,15 @@ export interface ToolResult {
   output: string;
   /** The call failed. The model is told, and the loop carries on. */
   isError?: boolean;
+  /**
+   * Keep this result in the context.
+   *
+   * A tool that returns something the model must keep reading says so: the
+   * result is not replaced by a stub when the turn gets old. A skill is
+   * the plain case: its instructions are still needed long after the tool
+   * that loaded it has been forgotten.
+   */
+  keep?: boolean;
 }
 
 export interface Tool {
@@ -51,6 +60,15 @@ export interface Tool {
    * `write`, which is the careful answer.
    */
   effect?: "read" | "write" | "execute";
+  /**
+   * The most characters this tool's result may have.
+   *
+   * A tool that returns something the model must read whole says so, and
+   * the limit is its own: the agent's limit is for the ordinary tools.
+   */
+  maxChars?: number;
+  /** The most lines this tool's result may have. */
+  maxLines?: number;
   /** Runs the tool. */
   run(args: any, ctx: ToolContext): Promise<ToolResult>;
   /**
