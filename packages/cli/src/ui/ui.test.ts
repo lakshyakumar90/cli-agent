@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { lookupModel } from "@cli-agent/ai";
 import { color, stripAnsi, widthOf } from "./colors.js";
 import { inline, MarkdownStream, renderMarkdown } from "./markdown.js";
 import { diffLines, renderDiff } from "./diff.js";
@@ -111,6 +112,24 @@ describe("the status line", () => {
     expect(formatTokens(999)).toBe("999");
     expect(formatTokens(1500)).toBe("1.5k");
     expect(formatTokens(2_000_000)).toBe("2.0M");
+  });
+
+  it("says what the session has cost", () => {
+    const status = stripAnsi(
+      renderStatus({
+        model: "gemini-3.1-flash-lite",
+        usage: { inputTokens: 10_000, outputTokens: 2_000 },
+        info: lookupModel("gemini", "gemini-3.1-flash-lite"),
+        permissionMode: "ask",
+        turns: 4,
+      }),
+    );
+
+    // The cost is what the whole session has cost, not what the last turn
+    // cost.
+    expect(status).toContain("10.0k in");
+    expect(status).toContain("$");
+    expect(status).toContain("4 turns");
   });
 });
 

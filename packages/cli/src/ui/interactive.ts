@@ -88,7 +88,8 @@ export class InteractiveUi {
 
   private permissionMode: PermissionMode;
   private model: string;
-  private usage?: Usage;
+  /** What the whole session has used, so the cost adds up. */
+  private total: Usage = { inputTokens: 0, outputTokens: 0 };
   private turns = 0;
   private turn?: AbortController;
   private working = false;
@@ -235,7 +236,7 @@ export class InteractiveUi {
       case "/clear":
         this.options.state.messages = [];
         this.blocks.length = 0;
-        this.usage = undefined;
+        this.total = { inputTokens: 0, outputTokens: 0 };
         this.turns = 0;
         this.write(dim("the conversation is empty now\n"));
         return;
@@ -596,8 +597,27 @@ export class InteractiveUi {
           }
 
           case "done": {
-            this.usage = event.usage;
             this.turns += event.turns;
+            // What the session has used, so the cost adds up.
+            this.total = {
+              inputTokens: this.total.inputTokens + event.usage.inputTokens,
+              outputTokens:
+                this.total.outputTokens + event.usage.outputTokens,
+              ...(event.usage.cacheReadTokens === undefined
+                ? {}
+                : {
+                    cacheReadTokens:
+                      (this.total.cacheReadTokens ?? 0) +
+                      event.usage.cacheReadTokens,
+                  }),
+              ...(event.usage.cacheWriteTokens === undefined
+                ? {}
+                : {
+                    cacheWriteTokens:
+                      (this.total.cacheWriteTokens ?? 0) +
+                      event.usage.cacheWriteTokens,
+                  }),
+            };
             break;
           }
 
@@ -635,7 +655,8 @@ export class InteractiveUi {
 
     return {
       model: modelIdOf(this.model),
-      ...(this.usage === undefined ? {} : { usage: this.usage }),
+      // What the whole session has used, so the cost is what it has cost.
+      ...(this.turns === 0 ? {} : { usage: this.total }),
       ...(info === undefined ? {} : { info }),
       permissionMode: this.permissionMode,
       turns: this.turns,
