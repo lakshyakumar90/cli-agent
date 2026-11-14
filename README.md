@@ -22,6 +22,8 @@ agent -p "find every place that writes to the database and list them"
   in the middle of a task and pick it up again.
 - **Delegate.** It can hand a job to another agent — an explorer, a coder, a
   reviewer — that works in its own context and reports back in a few lines.
+- **Be extended.** MCP servers, skills, hooks, your own commands and your own
+  TypeScript extensions all add behaviour without a fork.
 
 ## Install and run
 
@@ -145,13 +147,100 @@ The guards: a worker cannot spawn workers, a worker has its own token and
 cost budget and its own timeout, a few workers run at a time, and a failure
 is reported rather than retried in silence.
 
+## Adding behaviour without forking
+
+### MCP servers
+
+The Model Context Protocol is how a program offers its tools to other
+programs. Put the servers in `.myagent/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "files": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] },
+    "remote": { "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer ..." } }
+  }
+}
+```
+
+Each server's tools become tools of the agent, named `server__tool` — the
+`files` server above gives `files__read_file`. The schema the server sends
+is checked the same way our own tools are, and a server that does not
+answer is reported and left behind: it never holds the agent up.
+
+### Skills
+
+A skill is a folder with a `SKILL.md` in it, under `.myagent/skills`. Only
+its name and its description go into the prompt — the body can be long, and
+most of it is not needed unless the task calls for it. The model asks for
+the one it wants, and the body arrives then and stays.
+
+### Hooks
+
+A hook is a shell command that runs when something happens. Put them in
+`.myagent/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{ "matcher": "bash", "command": "./scripts/no-rm-rf.sh" }],
+    "PostToolUse": [{ "matcher": "write", "command": "./scripts/lint.sh" }],
+    "SessionStart": [{ "command": "./scripts/setup.sh" }]
+  }
+}
+```
+
+The call comes on the hook's standard input as JSON. A `PreToolUse` command
+that exits with something other than zero stops the call, and what it
+printed is the reason the model is given. `PostToolUse` cannot stop
+anything, but what it prints is added to the result. `SessionStart` runs
+once, and what it says becomes a note in the prompt.
+
+### Your own commands
+
+A command is a markdown file in `.myagent/commands`. The name of the file
+is the name of the command:
+
+```markdown
+---
+description: Deploy the app
+argument-hint: <environment>
+---
+Deploy the app to $1. Run the tests first, and say what you did.
+```
+
+`$ARGUMENTS` is everything you typed after the command, and `$1` to `$9`
+are the words of it. `/help` lists the commands.
+
+### Extensions
+
+An extension is a TypeScript module in `.myagent/extensions` that exports a
+`register` function. It is given an API and adds what it likes:
+
+```ts
+export function register(api) {
+  api.addTool({
+    name: "hello",
+    description: "Says hello to somebody.",
+    schema: api.z.object({ name: api.z.string() }),
+    async run(args) {
+      return { output: `hello ${args.name}` };
+    },
+  });
+}
+```
+
+It can also add commands and providers. The tools of an extension and the
+tools of the MCP servers go behind the permissions, like our own: a tool
+nobody knows is treated as one that changes things.
+
 ## The packages
 
 | Package | What is in it |
 | --- | --- |
 | `packages/ai` | the providers, the credentials, the model table, the factory |
 | `packages/core` | the loop, the context, the sessions, the orchestration |
-| `packages/tools` | the tools, the permissions, the validation |
+| `packages/tools` | the tools, the permissions, the validation, the MCP client |
 | `packages/cli` | the command line and the interactive session |
 
 Everything streams; nothing prints from the core. Long operations take an
@@ -177,6 +266,7 @@ pnpm --filter @cli-agent/core demo:prompt
 pnpm --filter @cli-agent/core demo:compact
 pnpm --filter @cli-agent/core demo:session
 pnpm --filter @cli-agent/core demo:agents
+pnpm --filter @cli-agent/cli demo:extensions
 ```
 
 `scripts/verify-commits.ps1` checks that every commit stands on its own: a
