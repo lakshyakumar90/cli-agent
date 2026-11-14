@@ -220,6 +220,43 @@ describe("the task tool", () => {
     expect(seen).toEqual([]);
   });
 
+  it("gives the worker the model id the provider knows", async () => {
+    const asked: string[] = [];
+
+    const provider: Provider = {
+      id: "test",
+      models: async () => [],
+      async *stream(request: StreamRequest): AsyncGenerator<Event> {
+        asked.push(request.model);
+        yield { t: "text", delta: "ok" };
+        yield {
+          t: "done",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          stop: "end",
+        };
+      },
+    };
+
+    const task = createTaskTool({
+      roles: new Map([
+        ["explorer", role({ model: "openrouter/some/model:free" })],
+      ]),
+      providerFor: async () => provider,
+      defaultModel: "test/lead",
+      tools: [readTool],
+      cwd: workspace,
+    });
+
+    await task.run(
+      { agent: "explorer", prompt: "go" },
+      { cwd: workspace, signal: new AbortController().signal },
+    );
+
+    // The provider knows its model by the id it uses on the wire; the
+    // "provider/" of "provider/model" is for us, not for it.
+    expect(asked).toEqual(["some/model:free"]);
+  });
+
   it("runs a few workers at a time", async () => {
     let running = 0;
     let peak = 0;

@@ -150,8 +150,8 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           worktree = await createWorktree(cwd, `${args.agent}-${taskId}`);
         }
 
-        const model = role.model ?? defaultModel;
-        const provider = await providerFor(model);
+        const ref = role.model ?? defaultModel;
+        const provider = await providerFor(ref);
 
         // The worker gets the tools its role names — and never the task
         // tool, unless its role asks for it.
@@ -163,7 +163,9 @@ export function createTaskTool(options: TaskToolOptions): Tool {
         );
 
         const child: AgentState = createState(provider, {
-          model,
+          // The provider knows its own model by the id it uses on the wire:
+          // the "provider/" of "provider/model" is for us, not for it.
+          model: modelIdOf(ref),
           tools: workerTools,
           system: role.prompt,
           cwd: worktree?.path ?? cwd,
@@ -192,7 +194,7 @@ export function createTaskTool(options: TaskToolOptions): Tool {
           }
           if (event.t === "done") {
             tokens += event.usage.inputTokens + event.usage.outputTokens;
-            cost += costOf(providerIdOf(model), model, event.usage);
+            cost += costOf(providerIdOf(ref), modelIdOf(ref), event.usage);
             reason = event.reason;
           }
         }
@@ -241,6 +243,12 @@ export function createTaskTool(options: TaskToolOptions): Tool {
 function providerIdOf(ref: string): string {
   const slash = ref.indexOf("/");
   return slash > 0 ? ref.slice(0, slash) : ref;
+}
+
+/** The model id of a "provider/model" ref. */
+function modelIdOf(ref: string): string {
+  const slash = ref.indexOf("/");
+  return slash > 0 ? ref.slice(slash + 1) : ref;
 }
 
 /** Merge the branch of a worker that wrote something. */
