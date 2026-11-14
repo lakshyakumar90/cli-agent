@@ -10,4 +10,13 @@ export default defineConfig({
   clean: true,
   outDir: "dist",
   noExternal: ["@cli-agent/ai", "@cli-agent/core", "@cli-agent/tools", "zod"],
+  /**
+   * The MCP SDK stays outside the bundle.
+   *
+   * It uses CommonJS inside (cross-spawn), and Node handles that
+   * interop properly. A bundler cannot: it turns the `require` of
+   * "child_process" into a call that throws, and the MCP servers never
+   * answer.
+   */
+  external: ["@modelcontextprotocol/sdk"],
 });

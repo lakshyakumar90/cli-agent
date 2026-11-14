@@ -53,6 +53,9 @@ importers:
       '@cli-agent/tools':
         specifier: workspace:*
         version: link:../tools
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.2
+        version: 1.32.2(supports-color@7.2.0)(zod@4.6.7)
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*

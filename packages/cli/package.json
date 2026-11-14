@@ -22,6 +22,7 @@
     "@cli-agent/ai": "workspace:*",
     "@cli-agent/core": "workspace:*",
     "@cli-agent/tools": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@modelcontextprotocol/sdk": "^1.32.2"
   },
   "devDependencies": {
