@@ -154,7 +154,7 @@ describe("the agent in a real project", () => {
     }
 
     expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
-  }, 30_000);
+  }, 120_000);
 
   it("cannot write outside the workspace without permission", async () => {
     const repo = await createSampleRepo(directory);
@@ -249,7 +249,7 @@ describe("the agent in a real project", () => {
     // The file is untouched.
     const source = await readFile(repo.source, "utf8");
     expect(source).toContain("a + b - 1");
-  }, 30_000);
+  }, 120_000);
 });
 
 

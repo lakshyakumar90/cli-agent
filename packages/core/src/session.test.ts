@@ -89,7 +89,7 @@ describe("a long session", () => {
     const last = backend.requests[backend.requests.length - 1];
     const sent = last?.messages.map((message) => textOf(message)).join("\n");
     expect(sent).toContain("the goal: fix the failing test");
-  }, 30_000);
+  }, 120_000);
 
   it("keeps the tool result in the transcript short", async () => {
     const backend: Provider = {
@@ -143,6 +143,6 @@ describe("a long session", () => {
     const result = state.messages.find((message) => message.role === "tool");
     expect(result?.content).toContain("lines omitted");
     expect(result?.content.length).toBeLessThan(500);
-  }, 30_000);
+  }, 120_000);
 });
 

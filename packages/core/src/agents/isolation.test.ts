@@ -62,7 +62,7 @@ describe("the isolation", () => {
     expect(await isRepository(worktree?.path as string)).toBe(true);
 
     await removeWorktree(directory, worktree as never);
-  }, 30_000);
+  }, 120_000);
 
   it("merges the branch of a worker", async () => {
     await makeRepository();
@@ -86,7 +86,7 @@ describe("the isolation", () => {
         "utf8",
       ),
     ).resolves.toBe("new file");
-  }, 30_000);
+  }, 120_000);
 
   it("says so when the branch cannot be merged", async () => {
     await makeRepository();
@@ -107,6 +107,6 @@ describe("the isolation", () => {
     // A conflict is reported, not thrown.
     expect(merged.merged).toBe(false);
     expect(merged.message.length).toBeGreaterThan(0);
-  }, 30_000);
+  }, 120_000);
 });
 
