@@ -18,6 +18,9 @@ import {
   type PermissionRule,
   type Tool,
 } from "@cli-agent/tools";
+import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   CheckpointStore,
   createState,
@@ -26,6 +29,7 @@ import {
   findCommands,
   HookRunner,
   loadExtensions,
+  Log,
   type LoadedExtensions,
   loadRoles,
   readHooksConfig,
@@ -83,6 +87,10 @@ export interface SessionOptions {
   commands?: Command[];
   /** The extensions, when they are already loaded. */
   extensions?: LoadedExtensions;
+  /** Where the log is written, when it is not the default. */
+  log?: string;
+  /** Write no log at all. */
+  noLog?: boolean;
 }
 
 export interface Session {
@@ -127,6 +135,36 @@ export function providerIdOf(ref: string): string {
 export function modelIdOf(ref: string): string {
   const slash = ref.indexOf("/");
   return slash <= 0 ? ref : ref.slice(slash + 1);
+}
+
+/**
+ * Open the log of a session.
+ *
+ * The log goes beside the sessions, in the user's own directory, unless
+ * the command line says where it should go.
+ */
+async function openLog(
+  options: SessionOptions,
+  sessionId: string | undefined,
+): Promise<Log | undefined> {
+  if (options.noLog === true) return undefined;
+
+  const path =
+    options.log ??
+    join(
+      homedir(),
+      ".myagent",
+      "logs",
+      `${sessionId ?? "session"}.jsonl`,
+    );
+
+  try {
+    await mkdir(dirname(path), { recursive: true });
+  } catch {
+    return undefined;
+  }
+
+  return new Log({ path });
 }
 
 /** Build the session. */
@@ -225,6 +263,9 @@ export async function createSession(
     ...extensions.commands,
   ];
 
+  // The log: everything that happens, one JSON object per line.
+  const log = await openLog(options, sessionId);
+
   const state = createState(provider, {
     model,
     tools: [...tools, task, skill],
@@ -234,6 +275,7 @@ export async function createSession(
     checkpoints: new CheckpointStore(),
     active: { skills },
     hooks,
+    log,
   });
 
   return {

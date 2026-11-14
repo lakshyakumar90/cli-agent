@@ -50,6 +50,8 @@ async function main(): Promise<number> {
       ask: askPermission,
       continueLast: options.continueLast,
       ...(options.resume === undefined ? {} : { resume: options.resume }),
+      ...(options.log === undefined ? {} : { log: options.log }),
+      ...(options.noLog === true ? { noLog: true } : {}),
     });
   } catch (error) {
     process.stderr.write(

@@ -30,6 +30,10 @@ export interface CliOptions {
   continueLast: boolean;
   /** Open a session: named, or the newest one. */
   resume?: string;
+  /** Where the log of the session is written. */
+  log?: string;
+  /** Write no log at all. */
+  noLog?: boolean;
 }
 
 /** The model used when nothing says otherwise. */
@@ -59,6 +63,8 @@ Options:
       --rpc                      read and write JSON lines
       --continue                 carry on with the last session here
       --resume [id]              open a session (the newest one when none is named)
+      --log <file>               write the log of the session to this file
+      --no-log                   write no log
   -v, --verbose                  show the tool activity
   -h, --help                     this text
 `;
@@ -133,8 +139,21 @@ export function parseArgs(argv: string[]): ParseResult {
         break;
       }
 
-      case "--cwd": {
+      case "--log": {
         const value = argv[index + 1];
+        if (value === undefined || value.startsWith("-")) {
+          return { ok: false, error: "--log needs a file" };
+        }
+        options.log = value;
+        index += 1;
+        break;
+      }
+
+      case "--no-log":
+        options.noLog = true;
+        break;
+
+      case "--cwd": {        const value = argv[index + 1];
         if (value === undefined) {
           return { ok: false, error: "--cwd needs a directory" };
         }
