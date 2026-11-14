@@ -20,8 +20,17 @@ foreach ($item in $Commits) {
   }
 }
 
-if (Test-Path $work) { Remove-Item $work -Recurse -Force }
-New-Item -ItemType Directory -Path $work | Out-Null
+if (Test-Path $work) {
+  # A worktree that is still registered has to go through git first: the
+  # files in it are held open by the tools that were running in it.
+  & git -C $root worktree prune
+  Get-ChildItem $work -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+    & git -C $root worktree remove --force $_.FullName 2>&1 | Out-Null
+  }
+  & git -C $root worktree prune
+  Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+}
+New-Item -ItemType Directory -Path $work -Force | Out-Null
 
 $results = @()
 
@@ -33,6 +42,7 @@ foreach ($commit in $list) {
   & git -C $root worktree add --detach $dir $commit 2>&1 | Out-Null
   if ($LASTEXITCODE -ne 0) {
     $results += "$short WORKTREE-FAILED"
+    Write-Output "$short WORKTREE-FAILED"
     continue
   }
 
