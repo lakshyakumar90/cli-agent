@@ -458,8 +458,8 @@ export class InteractiveUi {
             `${mark} ${agent.name}  ${dim(agent.description ?? agent.model)}\n`,
           );
         }
+        this.write(dim("\n/agents <name> to switch\n"));
       }
-      this.write(dim("\n/agents <name> to switch\n"));
       return;
     }
 
