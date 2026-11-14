@@ -109,4 +109,9 @@ describe("what a command sends", () => {
   it("leaves a missing argument empty", () => {
     expect(renderCommand(command("Deploy to $1."), "")).toBe("Deploy to .");
   });
+
+  it("does not look at the arguments again", () => {
+    // The user typed "$1"; it is what they typed, not a placeholder.
+    expect(renderCommand(command("Do $ARGUMENTS."), "$1")).toBe("Do $1.");
+  });
 });

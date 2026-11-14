@@ -133,13 +133,15 @@ export function renderCommand(command: Command, args: string): string {
 
   let prompt = command.content;
 
-  prompt = prompt.replace(/\$ARGUMENTS\b/g, trimmed);
+  // The numbered words first, and then the whole of them: what the user
+  // typed is put in as it was, and is not looked at again.
   for (let index = 1; index <= 9; index += 1) {
     prompt = prompt.replace(
       new RegExp(`\\$${index}\\b`, "g"),
       words[index - 1] ?? "",
     );
   }
+  prompt = prompt.replace(/\$ARGUMENTS\b/g, trimmed);
 
   // A command that does not use the arguments still gets them.
   if (trimmed.length > 0 && !/\$ARGUMENTS\b|\$[1-9]\b/.test(command.content)) {
