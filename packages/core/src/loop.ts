@@ -327,8 +327,16 @@ export function accumulate(
       const last = turn.content.at(-1);
       if (last?.type === "thinking") {
         last.text += event.delta;
+        // A signature arrives with the thought it signs.
+        if (event.signature !== undefined) last.signature = event.signature;
       } else {
-        turn.content.push({ type: "thinking", text: event.delta });
+        turn.content.push({
+          type: "thinking",
+          text: event.delta,
+          ...(event.signature === undefined
+            ? {}
+            : { signature: event.signature }),
+        });
       }
       return { t: "thinking", delta: event.delta };
     }
@@ -339,6 +347,11 @@ export function accumulate(
         id: event.call.id,
         name: event.call.name,
         args: event.call.args,
+        // Some providers sign a call - Gemini does - and the signature has
+        // to go back with it, or the next request is refused.
+        ...(event.call.signature === undefined
+          ? {}
+          : { signature: event.call.signature }),
       });
       // The model asked for this tool; the loop runs it once the turn ends.
       return { t: "toolStart", call: event.call };
