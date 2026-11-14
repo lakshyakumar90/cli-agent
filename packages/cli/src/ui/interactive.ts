@@ -76,6 +76,8 @@ export interface InteractiveOptions {
   roles?: Map<string, AgentRole>;
   /** The commands the user has of their own. */
   commands?: Command[];
+  /** Where the log of the session is written. */
+  logPath?: string;
 }
 
 /** The key that folds the last tool block. */
@@ -471,6 +473,11 @@ export class InteractiveUi {
     }
 
     this.write(dim("\n@file puts a file in the prompt, !command runs a shell\n"));
+
+    const logPath = this.options.logPath;
+    if (logPath !== undefined && logPath.length > 0) {
+      this.write(dim(`\nthe log of this session is at ${logPath}\n`));
+    }
   }
 
   /** List or switch the agent. */

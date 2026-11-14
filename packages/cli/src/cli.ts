@@ -122,6 +122,7 @@ async function main(): Promise<number> {
           agents: await loadAgents(),
           roles,
           commands,
+          ...(state.log?.path === undefined ? {} : { logPath: state.log.path }),
           onModel: async (ref) => {
             try {
               // A provider an extension added is a provider too.
