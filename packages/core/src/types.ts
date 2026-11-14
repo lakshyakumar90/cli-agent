@@ -57,11 +57,26 @@ export interface AgentState {
   limits?: AgentLimits;
   /** The skills, the plan and the checklist: the dynamic layer. */
   active?: ActiveContext;
-
+  /** Where the conversation is written down, when it is written down at all. */
+  journal?: Journal;
   /** The snapshots that make an edit undoable. */
   checkpoints?: CheckpointStore;
   /** How far off the token estimate was, so the next one is closer. */
   tokens?: TokenCalibration;
+}
+
+/**
+ * Where a conversation is written down.
+ *
+ * The journal is append-only: every message is one more entry, and the entry
+ * names the one before it, so the sessions of a project are a tree.
+ */
+export interface Journal {
+  /** Append a message; returns the entry id. */
+  append(
+    msg: Msg,
+    options?: { compacted?: boolean; model?: string },
+  ): Promise<string>;
 }
 
 /**
@@ -183,6 +198,8 @@ export function createState(
     limits?: AgentLimits;
     /** The skills, the plan and the checklist: the dynamic layer. */
     active?: ActiveContext;
+    /** Where the conversation is written down. */
+    journal?: Journal;
     /** The snapshots that make an edit undoable. */
     checkpoints?: CheckpointStore;
   },
@@ -196,9 +213,9 @@ export function createState(
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     ...(options.limits === undefined ? {} : { limits: options.limits }),
     ...(options.active === undefined ? {} : { active: options.active }),
+    ...(options.journal === undefined ? {} : { journal: options.journal }),
     ...(options.checkpoints === undefined
       ? {}
       : { checkpoints: options.checkpoints }),
   };
 }
-

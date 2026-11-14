@@ -57,6 +57,7 @@ export async function* run(
 ): AsyncGenerator<AgentEvent> {
   const userMessage: Msg = { role: "user", content: input };
   state.messages.push(userMessage);
+  await journal(state, userMessage);
 
   const limits: Required<
     Pick<
@@ -152,6 +153,12 @@ export async function* run(
           if (compacted !== undefined) {
             state.messages = compacted;
             ctx = await buildContext(state);
+            // The compaction is one more entry in the session, not a rewrite
+            // of what came before it.
+            const summary = compacted[0];
+            if (summary !== undefined) {
+              await journal(state, summary, { compacted: true });
+            }
             yield { t: "compacted", tokens: precise, budget: budget.total };
           }
         }
@@ -209,6 +216,7 @@ export async function* run(
     }
 
     state.messages.push(turn);
+    await journal(state, turn);
 
     const calls = turn.content.filter(
       (block): block is ToolCall => block.type === "toolCall",
@@ -258,6 +266,10 @@ export async function* run(
 
     state.messages.push(...results);
     unanswered = [];
+
+    for (const result of results) {
+      await journal(state, result);
+    }
 
     if (signal.aborted) {
       yield* finish("aborted");
@@ -418,6 +430,30 @@ async function snapshotBefore(
   await checkpoints.snapshot(call.id, resolved);
 }
 
+/**
+ * Write a message to the session, when there is one.
+ *
+ * The journal is append-only: the session keeps everything, and a compaction
+ * is one more entry rather than a rewrite of what came before.
+ */
+async function journal(
+  state: AgentState,
+  msg: Msg,
+  options: { compacted?: boolean } = {},
+): Promise<void> {
+  const journal = state.journal;
+  if (journal === undefined) return;
+
+  try {
+    await journal.append(msg, {
+      ...(options.compacted === true ? { compacted: true } : {}),
+      model: state.model,
+    });
+  } catch {
+    // A session that cannot be written must not stop the agent.
+  }
+}
+
 function notRun(call: ToolCall, reason: LoopEnd): ToolResultMsg {
   const content =
     reason === "aborted"
@@ -438,7 +474,6 @@ function callSignature(call: ToolCall): string {
   }
   return `${call.name}:${args}`;
 }
-
 
 
 
