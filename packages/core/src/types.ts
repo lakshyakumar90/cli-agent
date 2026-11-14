@@ -14,6 +14,7 @@ import type { Tool } from "@cli-agent/tools";
 import type { ActiveContext } from "./skills.js";
 import type { CheckpointStore } from "./checkpoints.js";
 import type { HookRunner } from "./hooks.js";
+import type { Log } from "./logging.js";
 
 /**
  * One assistant turn, while it is being built.
@@ -73,6 +74,8 @@ export interface AgentState {
   depth?: number;
   /** The hooks that run when things happen. */
   hooks?: HookRunner;
+  /** Where everything that happened is written down. */
+  log?: Log;
   /** How far off the token estimate was, so the next one is closer. */
   tokens?: TokenCalibration;
 }
@@ -230,6 +233,8 @@ export function createState(
     depth?: number;
     /** The hooks that run when things happen. */
     hooks?: HookRunner;
+    /** Where everything that happened is written down. */
+    log?: Log;
   },
 ): AgentState {
   return {
@@ -247,5 +252,6 @@ export function createState(
       : { checkpoints: options.checkpoints }),
     ...(options.depth === undefined ? {} : { depth: options.depth }),
     ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
+    ...(options.log === undefined ? {} : { log: options.log }),
   };
 }

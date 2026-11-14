@@ -113,6 +113,9 @@ export async function* run(
       }
       unanswered = [];
     }
+
+    state.log?.write({ event: "turn", turn: turns, reason });
+
     yield { t: "done", stop, turns, usage, reason };
   }
 
@@ -138,6 +141,16 @@ export async function* run(
     }
 
     let ctx: Context = await buildContext(state);
+
+    // Everything that happens is written down, so the session can be
+    // looked at afterwards.
+    state.log?.write({
+      event: "request",
+      model: state.model,
+      messages: ctx.messages.length,
+      tools: ctx.tools.length,
+      systemChars: ctx.system.length,
+    });
 
     // Does the conversation still fit? If not, the old part of it is
     // summarised and the turn goes on with the smaller conversation.
@@ -215,7 +228,16 @@ export async function* run(
           usage = item.usage;
           turn.usage = item.usage;
           tokensUsed += item.usage.inputTokens + item.usage.outputTokens;
-          costUsed += costOf(providerIdOf(state), state.model, item.usage);
+          const cost = costOf(providerIdOf(state), state.model, item.usage);
+          costUsed += cost;
+
+          state.log?.write({
+            event: "usage",
+            inputTokens: item.usage.inputTokens,
+            outputTokens: item.usage.outputTokens,
+            ...(cost > 0 ? { cost } : {}),
+          });
+
           // The correction from the real usage.
           state.tokens = {
             ratio: correctRatio(
@@ -396,6 +418,15 @@ export async function execTool(
   }
 
   try {
+    // What the tool was asked to do is written down, with the secrets
+    // taken out.
+    state.log?.write({
+      event: "toolStart",
+      tool: tool.name,
+      args: call.args,
+    });
+    const started = Date.now();
+
     // A hook may stop the call before it happens.
     const before = await state.hooks?.run("PreToolUse", {
       tool: tool.name,
@@ -404,6 +435,13 @@ export async function execTool(
     });
     const stopped = before?.find((outcome) => outcome.blocked);
     if (stopped !== undefined) {
+      state.log?.write({
+        event: "toolEnd",
+        tool: tool.name,
+        ok: false,
+        ms: Date.now() - started,
+        outputChars: 0,
+      });
       return {
         role: "tool",
         callId: call.id,
@@ -431,6 +469,14 @@ export async function execTool(
       .map((outcome) => outcome.output)
       .filter((text) => text.length > 0)
       .join("\n");
+
+    state.log?.write({
+      event: "toolEnd",
+      tool: tool.name,
+      ok: result.isError !== true,
+      ms: Date.now() - started,
+      outputChars: result.output.length,
+    });
 
     return {
       role: "tool",
