@@ -28,6 +28,9 @@ export * from "./extensions.js";
 export * from "./redact.js";
 export * from "./logging.js";
 export * from "./untrusted.js";
+export * from "./evals/tasks.js";
+export * from "./evals/runner.js";
+export * from "./ref.js";
 
 
 
