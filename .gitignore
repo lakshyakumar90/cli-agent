@@ -33,6 +33,12 @@ dist
 .myagent/board.json
 .myagent/worktrees/
 
+# What the builds leave behind
+agent
+agent.exe
+*.tgz
+eval-report.json
+
 
 # Debug
 npm-debug.log*

@@ -4,7 +4,7 @@ import { defineConfig } from "tsup";
 // imports them), so the CLI bundles them: what ships is one file that runs
 // on its own.
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/cli.ts"],
   format: ["esm"],
   target: "node24",
   clean: true,
