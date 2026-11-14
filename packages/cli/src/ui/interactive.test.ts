@@ -4,14 +4,29 @@ import type { Event, ModelInfo, Provider, StreamRequest } from "@cli-agent/ai";
 import { createState, type AgentState } from "@cli-agent/core";
 import { InteractiveUi } from "./interactive.js";
 
-/** A provider that answers slowly, so there is a turn to interrupt. */
-function slowProvider(): Provider {
+/**
+ * A provider that answers slowly, so there is a turn to interrupt.
+ *
+ * It stops the moment the turn is aborted, the way a real provider does,
+ * so the test does not have to wait out the whole delay.
+ */
+function slowProvider(delay = 3_000): Provider {
   return {
     id: "slow",
     models: async (): Promise<ModelInfo[]> => [],
     async *stream(request: StreamRequest): AsyncGenerator<Event> {
       yield { t: "text", delta: "thinking about it" };
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, delay);
+        request.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
       if (request.signal.aborted) {
         throw new Error("aborted");
       }
