@@ -33,6 +33,7 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsup",
+    "build:binary": "bun build --compile src/cli.ts --outfile agent",
     "demo:extensions": "tsx scripts/demo-extensions.ts",
     "start": "node dist/cli.js",
     "lint": "eslint . --max-warnings 0",
