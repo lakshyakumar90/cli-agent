@@ -14,3 +14,4 @@ export * from "./providers/anthropic.js";
 export * from "./providers/gemini.js";
 export * from "./providers/antigravity.js";
 export * from "./auth/index.js";
+export * from "./fake.js";
