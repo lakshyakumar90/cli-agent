@@ -39,22 +39,23 @@ foreach ($commit in $list) {
   Push-Location $dir
   $ok = $true
   $why = ""
+  $log = Join-Path $work "$short.log"
 
-  & pnpm install --prefer-offline --ignore-scripts 2>&1 | Out-Null
+  & pnpm install --prefer-offline --ignore-scripts *> $log
   if ($LASTEXITCODE -ne 0) { $ok = $false; $why = "install" }
 
   if ($ok) {
-    & pnpm check-types 2>&1 | Out-Null
+    & pnpm check-types *>> $log
     if ($LASTEXITCODE -ne 0) { $ok = $false; $why = "types" }
   }
 
   if ($ok) {
-    & pnpm test 2>&1 | Out-Null
+    & pnpm test *>> $log
     if ($LASTEXITCODE -ne 0) { $ok = $false; $why = "test" }
   }
 
   if ($ok) {
-    & pnpm build 2>&1 | Out-Null
+    & pnpm build *>> $log
     if ($LASTEXITCODE -ne 0) { $ok = $false; $why = "build" }
   }
 
@@ -65,9 +66,10 @@ foreach ($commit in $list) {
   if ($ok) {
     $results += "$short OK"
     Write-Output "$short OK"
+    Remove-Item $log -Force -ErrorAction SilentlyContinue
   } else {
     $results += "$short FAILED ($why)"
-    Write-Output "$short FAILED ($why)"
+    Write-Output "$short FAILED ($why) - the log is in $log"
   }
 }
 
