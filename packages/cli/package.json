@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsup",
+    "demo:extensions": "tsx scripts/demo-extensions.ts",
     "start": "node dist/index.js",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
@@ -20,7 +21,8 @@
   "dependencies": {
     "@cli-agent/ai": "workspace:*",
     "@cli-agent/core": "workspace:*",
-    "@cli-agent/tools": "workspace:*"
+    "@cli-agent/tools": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
