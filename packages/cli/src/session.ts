@@ -25,6 +25,8 @@ import {
   findSkills,
   findCommands,
   HookRunner,
+  loadExtensions,
+  type LoadedExtensions,
   loadRoles,
   readHooksConfig,
   SessionStore,
@@ -79,6 +81,8 @@ export interface SessionOptions {
   hooks?: HookRunner;
   /** The commands the user has of their own. */
   commands?: Command[];
+  /** The extensions, when they are already loaded. */
+  extensions?: LoadedExtensions;
 }
 
 export interface Session {
@@ -102,6 +106,8 @@ export interface Session {
   mcp: McpTools;
   /** The commands the user has of their own. */
   commands: Command[];
+  /** What the extensions added. */
+  extensions: LoadedExtensions;
 }
 
 /** The provider id of a "provider/model" ref. */
@@ -123,16 +129,37 @@ export async function createSession(
   const providerId = providerIdOf(options.model);
   const model = modelIdOf(options.model);
 
-  const provider =
-    options.provider ??
-    (await createProvider(providerId, options.factory ?? {}));
+  // The extensions of the project: the tools, commands and providers they
+  // add.
+  const extensions =
+    options.extensions ?? (await loadExtensions({ cwd: options.cwd }));
 
-  const tools = withPermissions(createTools(), {
-    mode: options.permissionMode,
-    rules: options.rules ?? [],
-    workspace: options.cwd,
-    ...(options.ask === undefined ? {} : { ask: options.ask }),
-  });
+  // The factory knows the providers an extension added, so a model may be
+  // served by one.
+  const factory: ProviderFactoryOptions = {
+    ...(options.factory ?? {}),
+    providers: extensions.providers,
+  };
+
+  const provider =
+    options.provider ?? (await createProvider(providerId, factory));
+
+  // The tools of the MCP servers, if there are any.
+  const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
+
+  // Everything the model may call, behind the permissions: our own tools,
+  // the tools of the extensions and the tools of the MCP servers. A tool
+  // nobody knows is treated as one that changes things, which is the
+  // careful answer.
+  const tools = withPermissions(
+    [...createTools(), ...extensions.tools, ...mcp.tools],
+    {
+      mode: options.permissionMode,
+      rules: options.rules ?? [],
+      workspace: options.cwd,
+      ...(options.ask === undefined ? {} : { ask: options.ask }),
+    },
+  );
 
   const store = new SessionStore({
     cwd: options.cwd,
@@ -161,7 +188,7 @@ export async function createSession(
   const task = createTaskTool({
     roles,
     providerFor: async (workerModel) =>
-      createProvider(providerIdOf(workerModel), options.factory ?? {}),
+      createProvider(providerIdOf(workerModel), factory),
     defaultModel: options.model,
     tools,
     cwd: options.cwd,
@@ -179,20 +206,21 @@ export async function createSession(
   const skills = options.skills ?? (await findSkills(options.cwd));
   const skill = createSkillTool({ cwd: options.cwd, skills });
 
-  // The tools of the MCP servers, if there are any.
-  const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
-
   // The hooks: the shell commands that run when things happen.
   const hooks =
     options.hooks ??
     new HookRunner(await readHooksConfig(options.cwd), { cwd: options.cwd });
 
-  // The commands the user has of their own.
-  const commands = options.commands ?? (await findCommands(options.cwd));
+  // The commands the user has of their own: the files in the folder, and
+  // the ones the extensions added.
+  const commands = [
+    ...(options.commands ?? (await findCommands(options.cwd))),
+    ...extensions.commands,
+  ];
 
   const state = createState(provider, {
     model,
-    tools: [...tools, task, skill, ...mcp.tools],
+    tools: [...tools, task, skill],
     messages,
     cwd: options.cwd,
     journal: store,
@@ -212,5 +240,6 @@ export async function createSession(
     skills,
     mcp,
     commands,
+    extensions,
   };
 }

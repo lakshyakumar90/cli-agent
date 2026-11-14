@@ -104,7 +104,10 @@ async function main(): Promise<number> {
         commands,
         onModel: async (ref) => {
           try {
-            const provider = await createProvider(ref.split("/")[0] as string);
+            // A provider an extension added is a provider too.
+            const provider = await createProvider(ref.split("/")[0] as string, {
+              providers: built.extensions.providers,
+            });
             return provider;
           } catch (error) {
             process.stderr.write(
