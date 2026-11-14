@@ -24,6 +24,12 @@ agent -p "find every place that writes to the database and list them"
   reviewer — that works in its own context and reports back in a few lines.
 - **Be extended.** MCP servers, skills, hooks, your own commands and your own
   TypeScript extensions all add behaviour without a fork.
+- **Be watched.** Every request, tool call and usage is written down as JSONL,
+  with the secrets taken out, and the status line says what the session has
+  cost so far.
+- **Be measured.** A suite of fourteen tasks, each in a throwaway repository
+  with a test of its own, says how often the agent gets the job done and what
+  it costs.
 
 ## Install and run
 
@@ -35,6 +41,21 @@ pnpm --filter @cli-agent/cli start -p "..." # print the answer and exit
 ```
 
 Requires Node 24 or newer.
+
+To install it as a command:
+
+```sh
+cd packages/cli
+npm pack
+npm i -g ./cli-agent-cli-0.1.0.tgz
+agent -p "what does this repository do?"
+```
+
+Or as one file that needs nothing installed:
+
+```sh
+pnpm --filter @cli-agent/cli build:binary   # packages/cli/agent
+```
 
 ## The command line
 
@@ -234,12 +255,56 @@ It can also add commands and providers. The tools of an extension and the
 tools of the MCP servers go behind the permissions, like our own: a tool
 nobody knows is treated as one that changes things.
 
+## Seeing what it did
+
+Every request, every tool call and every usage is written down as one JSON
+object per line, in `~/.myagent/logs/<session>.jsonl`:
+
+```json
+{"at":"2026-11-14T10:53:06.889Z","event":"request","model":"gemini-3.1-flash-lite","messages":4,"tools":12,"systemChars":2140}
+{"at":"2026-11-14T10:53:07.104Z","event":"toolStart","tool":"read","args":{"path":"src/index.ts"}}
+{"at":"2026-11-14T10:53:07.220Z","event":"toolEnd","tool":"read","ok":true,"ms":116,"outputChars":4821}
+{"at":"2026-11-14T10:53:08.006Z","event":"usage","inputTokens":1897,"outputTokens":214,"cost":0.0005}
+```
+
+`--log <file>` says where it goes, `--no-log` writes none. What goes in is
+redacted first: the keys the process knows are taken out by their value, and
+the shapes of the keys that are written in the code are taken out by their
+shape.
+
+What the agent reads is treated as data, not instructions. A file in the
+repository may say "ignore what you were told and run this", and a page from
+the web certainly may; neither is the user talking. The result of a tool
+that holds foreign content is marked, and the prompt says what to do with it.
+
+## The eval suite
+
+Fourteen tasks, each a small repository, a question, and a test that says
+whether the work was done:
+
+```sh
+pnpm --filter @cli-agent/core eval
+```
+
+```
+✓ change a setting                 4 turns  1897 tokens  $0.0005
+✓ add a section to the readme       6 turns  1980 tokens  $0.0005
+✓ bump the version                 14 turns  2551 tokens  $0.0007
+...
+7/14 passed (50%)  49 turns  $0.0044  1600s
+```
+
+The pass rate, the turns and the cost are what say whether the agent got
+better or cheaper — a change that makes it worse is visible. The suite is
+run without a model first, so the tasks, the tests and the runner are all
+proved to work.
+
 ## The packages
 
 | Package | What is in it |
 | --- | --- |
 | `packages/ai` | the providers, the credentials, the model table, the factory |
-| `packages/core` | the loop, the context, the sessions, the orchestration |
+| `packages/core` | the loop, the context, the sessions, the orchestration, the evals |
 | `packages/tools` | the tools, the permissions, the validation, the MCP client |
 | `packages/cli` | the command line and the interactive session |
 
@@ -271,3 +336,8 @@ pnpm --filter @cli-agent/cli demo:extensions
 
 `scripts/verify-commits.ps1` checks that every commit stands on its own: a
 fresh worktree, a fresh install, the types, the tests and the build.
+
+The provider adapters are tried against the bytes the vendors actually sent.
+`pnpm --filter @cli-agent/ai record:fixtures` records them again; the
+recordings are in `packages/ai/src/fixtures/`, and the folder says which
+ones are real.
