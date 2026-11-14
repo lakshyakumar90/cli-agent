@@ -16,6 +16,7 @@
     "demo:prompt": "tsx scripts/demo-prompt.ts",
     "demo:compact": "tsx scripts/demo-compact.ts",
     "demo:session": "tsx scripts/demo-session.ts",
+    "demo:agents": "tsx scripts/demo-agents.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
@@ -36,5 +37,3 @@
     "zod": "^4.6.7"
   }
 }
-
-
