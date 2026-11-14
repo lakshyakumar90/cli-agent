@@ -34,6 +34,7 @@ import {
 import { compactMessages } from "./compact.js";
 import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
+import { blockReason } from "./hooks.js";
 import { shrinkText, DEFAULT_MAX_CHARS, DEFAULT_MAX_LINES } from "./shrink.js";
 import {
   DEFAULT_LIMITS,
@@ -63,6 +64,10 @@ export async function* run(
   const userMessage: Msg = { role: "user", content: input };
   state.messages.push(userMessage);
   await journal(state, userMessage);
+
+  // The session hook runs once, when the session opens. What it says
+  // becomes a note in the prompt, and stays there.
+  await sessionStart(state, signal);
 
   const limits: Required<
     Pick<
@@ -382,20 +387,53 @@ export async function execTool(
     // can be undone.
     await snapshotBefore(state, tool, call);
 
+    // A hook may stop the call before it happens.
+    const before = await state.hooks?.run("PreToolUse", {
+      tool: tool.name,
+      args: call.args,
+      cwd: state.cwd ?? process.cwd(),
+    });
+    const stopped = before?.find((outcome) => outcome.blocked);
+    if (stopped !== undefined) {
+      return {
+        role: "tool",
+        callId: call.id,
+        content: blockReason(before ?? []),
+        isError: true,
+      };
+    }
+
     const result = await tool.run(call.args, {
       cwd: state.cwd ?? process.cwd(),
       signal,
     });
+
+    // A hook may say something about what happened.
+    const after = await state.hooks?.run("PostToolUse", {
+      tool: tool.name,
+      args: call.args,
+      cwd: state.cwd ?? process.cwd(),
+    });
+    const note = (after ?? [])
+      .map((outcome) => outcome.output)
+      .filter((text) => text.length > 0)
+      .join("\n");
+
     return {
       role: "tool",
       callId: call.id,
       // A tool can say a great deal; the model rarely needs all of it, and
       // the context is smaller for the rest of the session. A tool that
       // returns something the model must read whole sets its own limit.
-      content: shrinkText(result.output, {
-        maxLines: tool.maxLines ?? state.limits?.maxToolLines ?? DEFAULT_MAX_LINES,
-        maxChars: tool.maxChars ?? state.limits?.maxToolChars ?? DEFAULT_MAX_CHARS,
-      }),
+      content: shrinkText(
+        note.length > 0 ? `${result.output}\n\n${note}` : result.output,
+        {
+          maxLines:
+            tool.maxLines ?? state.limits?.maxToolLines ?? DEFAULT_MAX_LINES,
+          maxChars:
+            tool.maxChars ?? state.limits?.maxToolChars ?? DEFAULT_MAX_CHARS,
+        },
+      ),
       ...(result.isError === true ? { isError: true } : {}),
       ...(result.keep === true ? { keep: true } : {}),
     };
@@ -421,6 +459,36 @@ export async function execTool(
 function providerIdOf(state: AgentState): string {
   const provider = state.provider.id;
   return provider.length > 0 ? provider : "unknown";
+}
+
+/**
+ * Run the session hook, once.
+ *
+ * What it says becomes a note in the prompt, so the model reads it in every
+ * turn of the session.
+ */
+async function sessionStart(
+  state: AgentState,
+  signal: AbortSignal,
+): Promise<void> {
+  const hooks = state.hooks;
+  if (hooks === undefined) return;
+
+  const outcomes = await hooks.run("SessionStart", {
+    cwd: state.cwd ?? process.cwd(),
+  });
+
+  const notes = outcomes
+    .map((outcome) => outcome.output)
+    .filter((text) => text.length > 0);
+
+  if (notes.length === 0) return;
+
+  const active = state.active ?? {};
+  state.active = {
+    ...active,
+    notes: [...(active.notes ?? []), ...notes],
+  };
 }
 
 /**

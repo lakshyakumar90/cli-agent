@@ -90,6 +90,12 @@ export interface ActiveContext {
   plan?: string;
   /** The checklist, one item per line. */
   todo?: string[];
+  /**
+   * Notes that are always in the prompt.
+   *
+   * The session hook writes here: what it says is read in every turn.
+   */
+  notes?: string[];
 }
 
 /** The dynamic block, or nothing when there is nothing to say. */
@@ -112,6 +118,10 @@ export function renderActiveContext(active: ActiveContext | undefined): string {
         `- ${skill.name}${skill.description === undefined ? "" : `: ${skill.description}`}`,
     );
     parts.push(`Skills available:\n${lines.join("\n")}`);
+  }
+
+  if (active.notes !== undefined && active.notes.length > 0) {
+    parts.push(`Notes:\n${active.notes.join("\n\n")}`);
   }
 
   return parts.join("\n\n");
