@@ -125,6 +125,8 @@ describe("an extension", () => {
     const loaded = await loadExtensions({ cwd: directory });
 
     expect(loaded.logs).toContain("hello from the extension");
+    // And it says which one was loaded.
+    expect(loaded.logs).toContain("loaded the extension chatty");
   });
 
   it("is reported when it cannot be loaded, and the others carry on", async () => {

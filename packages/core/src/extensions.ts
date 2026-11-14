@@ -20,7 +20,9 @@
  *   }
  *
  * The module is loaded by Node itself, so it can be TypeScript: the types
- * are taken off and the rest is ordinary JavaScript.
+ * are taken off and the rest is ordinary JavaScript. Node asks for the
+ * project to say `"type": "module"`, because that is how it knows the
+ * file is a module and not CommonJS.
  *
  * An extension that cannot be loaded is reported and left behind. It must
  * not stop the agent from working.
@@ -122,13 +124,13 @@ export async function loadExtensions(
       const name = entry.replace(/\.(ts|mts|js|mjs)$/, "");
 
       try {
-        const loaded = await loadOne(path, name, options.cwd, {
+        await loadOne(path, name, options.cwd, {
           tools,
           commands,
           providers,
           logs,
         });
-        if (loaded !== undefined) logs.push(`loaded the extension ${name}`);
+        logs.push(`loaded the extension ${name}`);
       } catch (error) {
         problems.push({
           path,
