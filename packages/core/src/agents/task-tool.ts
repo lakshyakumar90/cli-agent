@@ -18,6 +18,7 @@ import type { Tool } from "@cli-agent/tools";
 import { z } from "zod";
 import { run } from "../loop.js";
 import { costOf } from "../budget.js";
+import { modelIdOf, providerIdOf } from "../ref.js";
 import { createState, type AgentState } from "../types.js";
 import { Board } from "./board.js";
 import {
@@ -237,18 +238,6 @@ export function createTaskTool(options: TaskToolOptions): Tool {
   };
 
   return taskTool;
-}
-
-/** The provider id of a "provider/model" ref. */
-function providerIdOf(ref: string): string {
-  const slash = ref.indexOf("/");
-  return slash > 0 ? ref.slice(0, slash) : ref;
-}
-
-/** The model id of a "provider/model" ref. */
-function modelIdOf(ref: string): string {
-  const slash = ref.indexOf("/");
-  return slash > 0 ? ref.slice(slash + 1) : ref;
 }
 
 /** Merge the branch of a worker that wrote something. */
