@@ -61,6 +61,8 @@ export interface AgentState {
   journal?: Journal;
   /** The snapshots that make an edit undoable. */
   checkpoints?: CheckpointStore;
+  /** How deep the agent is: the lead is 0, its workers 1. */
+  depth?: number;
   /** How far off the token estimate was, so the next one is closer. */
   tokens?: TokenCalibration;
 }
@@ -121,6 +123,11 @@ export interface AgentLimits {
   /** The most characters a tool result may have. Default 4000. */
   maxToolChars?: number;
   /**
+   * The tokens the agent may use in one prompt. When it is used up, the
+   * loop stops with `"budget-exhausted"`.
+   */
+  tokenBudget?: number;
+  /**
    * How many turns a tool result stays readable. An older one is replaced by
    * a one-line stub. Default 3.
    */
@@ -159,7 +166,9 @@ export type LoopEnd =
   /** The model kept asking for the same thing. */
   | "repeated-call"
   /** The user pressed Esc. */
-  | "aborted";
+  | "aborted"
+  /** The token budget was used up. */
+  | "budget-exhausted";
 
 /**
  * What the loop yields.
@@ -202,6 +211,8 @@ export function createState(
     journal?: Journal;
     /** The snapshots that make an edit undoable. */
     checkpoints?: CheckpointStore;
+    /** How deep the agent is: the lead is 0, its workers 1. */
+    depth?: number;
   },
 ): AgentState {
   return {
@@ -217,5 +228,6 @@ export function createState(
     ...(options.checkpoints === undefined
       ? {}
       : { checkpoints: options.checkpoints }),
+    ...(options.depth === undefined ? {} : { depth: options.depth }),
   };
 }

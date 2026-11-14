@@ -79,6 +79,7 @@ export async function* run(
 
   let turns = 0;
   let toolsExecuted = 0;
+  let tokensUsed = 0;
   let stop: StopReason = "end";
   let usage: Usage = { inputTokens: 0, outputTokens: 0 };
   // Calls of the last turn that have no answer yet.
@@ -111,6 +112,13 @@ export async function* run(
     }
     if (turns >= limits.maxTurns) {
       yield* finish("max-turns");
+      return;
+    }
+    if (
+      limits.tokenBudget !== undefined &&
+      tokensUsed >= limits.tokenBudget
+    ) {
+      yield* finish("budget-exhausted");
       return;
     }
 
@@ -191,8 +199,8 @@ export async function* run(
           stop = item.stop;
           usage = item.usage;
           turn.usage = item.usage;
-          // The provider says how many tokens it really used; the estimate is
-          // corrected with it.
+          tokensUsed += item.usage.inputTokens + item.usage.outputTokens;
+          // The correction from the real usage.
           state.tokens = {
             ratio: correctRatio(
               state.tokens?.ratio,

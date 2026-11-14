@@ -166,6 +166,36 @@ describe("loop guards", () => {
     expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
     expect(echo.calls).toHaveLength(3);
   });
+
+  it("stops when the token budget is used up", async () => {
+    const provider = scriptedProvider([
+      {
+        calls: [{ id: "call-1", name: "echo", args: { text: "ping" } }],
+        usage: { inputTokens: 100, outputTokens: 50 },
+      },
+      {
+        calls: [{ id: "call-2", name: "echo", args: { text: "ping" } }],
+        usage: { inputTokens: 100, outputTokens: 50 },
+      },
+      { text: "never reached", usage: { inputTokens: 1, outputTokens: 1 } },
+    ]);
+    const state = stateWith(provider, [echoTool()], {
+      limits: { tokenBudget: 100 },
+    });
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // The first turn used 150 tokens, over the budget of 100.
+    expect(events.at(-1)).toMatchObject({
+      t: "done",
+      reason: "budget-exhausted",
+      turns: 1,
+    });
+    // The second turn never happened.
+    expect(provider.requests).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
