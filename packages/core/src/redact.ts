@@ -42,7 +42,7 @@ const PATTERNS: RegExp[] = [
  * and only the value is taken out.
  */
 const SETTING =
-  /\b(api[_-]?key|apikey|secret|password|passwd|access[_-]?token|refresh[_-]?token|client[_-]?secret)\b(\s*[:=]\s*|["'\s]{1,4})["']?([A-Za-z0-9._~+/=-]{8,})["']?/gi;
+  /\b(api[ _-]?key|api[ _-]?secret|secret|password|passwd|access[ _-]?token|refresh[ _-]?token|client[ _-]?secret)\b(\s*[:=]\s*|["'\s]{1,4})["']?([A-Za-z0-9._~+/=-]{8,})["']?/gi;
 
 /**
  * A token that is sent with a scheme.

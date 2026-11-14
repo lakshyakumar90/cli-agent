@@ -32,6 +32,14 @@ describe("taking the secrets out", () => {
     expect(redacted).toContain("api_key");
   });
 
+  it("takes out a key that is written with a space", () => {
+    const text = "api key = abc123def456ghi";
+
+    const redacted = redact(text);
+
+    expect(redacted).not.toContain("abc123def456ghi");
+  });
+
   it("takes out a private key", () => {
     const text = [
       "-----BEGIN RSA PRIVATE KEY-----",
