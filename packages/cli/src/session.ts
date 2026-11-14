@@ -23,6 +23,7 @@ import {
   createState,
   createSkillTool,
   findSkills,
+  findCommands,
   HookRunner,
   loadRoles,
   readHooksConfig,
@@ -32,6 +33,7 @@ import {
   createTaskTool,
   type AgentState,
   type AgentRole,
+  type Command,
   type Skill,
 } from "@cli-agent/core";
 import {
@@ -75,6 +77,8 @@ export interface SessionOptions {
   mcp?: McpTools;
   /** The hooks, when they are already set up. */
   hooks?: HookRunner;
+  /** The commands the user has of their own. */
+  commands?: Command[];
 }
 
 export interface Session {
@@ -96,6 +100,8 @@ export interface Session {
   skills: Skill[];
   /** The MCP servers that answered, and the ones that did not. */
   mcp: McpTools;
+  /** The commands the user has of their own. */
+  commands: Command[];
 }
 
 /** The provider id of a "provider/model" ref. */
@@ -181,6 +187,9 @@ export async function createSession(
     options.hooks ??
     new HookRunner(await readHooksConfig(options.cwd), { cwd: options.cwd });
 
+  // The commands the user has of their own.
+  const commands = options.commands ?? (await findCommands(options.cwd));
+
   const state = createState(provider, {
     model,
     tools: [...tools, task, skill, ...mcp.tools],
@@ -202,5 +211,6 @@ export async function createSession(
     board,
     skills,
     mcp,
+    commands,
   };
 }

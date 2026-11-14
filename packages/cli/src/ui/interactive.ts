@@ -12,7 +12,8 @@ import { lookupModel, type ModelInfo } from "@cli-agent/ai";
 import type { AgentState } from "@cli-agent/core";
 import { run } from "@cli-agent/core";
 import type { CheckpointStore, SessionStore } from "@cli-agent/core";
-import type { AgentRole } from "@cli-agent/core";
+import type { AgentRole, Command } from "@cli-agent/core";
+import { renderCommand } from "@cli-agent/core";
 import { createBashTool } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
@@ -23,6 +24,7 @@ import {
   nextPermissionMode,
   parseShellEscape,
   parseSlash,
+  SLASH_COMMANDS,
 } from "./slash.js";
 import {
   permissionLabel,
@@ -72,6 +74,8 @@ export interface InteractiveOptions {
   agents?: Array<{ name: string; model: string; description?: string }>;
   /** The roles the agent can delegate to. */
   roles?: Map<string, AgentRole>;
+  /** The commands the user has of their own. */
+  commands?: Command[];
 }
 
 /** The key that folds the last tool block. */
@@ -195,6 +199,20 @@ export class InteractiveUi {
     if (name === "/exit" || name === "/quit") {
       this.closed = true;
       this.rl.close();
+      return;
+    }
+
+    if (name === "/help") {
+      this.showHelp();
+      return;
+    }
+
+    // A command of the user's own: the file says what to ask.
+    const custom = this.options.commands?.find(
+      (command) => command.name === name,
+    );
+    if (custom !== undefined) {
+      await this.ask(renderCommand(custom, args));
       return;
     }
 
@@ -429,6 +447,29 @@ export class InteractiveUi {
 
     this.options.state.messages = session.messages;
     this.write(`${green("resumed")} ${dim(args)}\n`);
+  }
+
+  /** The commands the session knows. */
+  private showHelp(): void {
+    this.write(`${bold("the commands")}\n`);
+
+    for (const command of SLASH_COMMANDS) {
+      this.write(`  ${command.name}  ${dim(command.description)}\n`);
+    }
+
+    const custom = this.options.commands ?? [];
+    if (custom.length > 0) {
+      this.write(`\n${bold("your own commands")}\n`);
+      for (const command of custom) {
+        const hint =
+          command.argumentHint === undefined ? "" : ` ${command.argumentHint}`;
+        this.write(
+          `  ${command.name}${hint}  ${dim(command.description ?? "")}\n`,
+        );
+      }
+    }
+
+    this.write(dim("\n@file puts a file in the prompt, !command runs a shell\n"));
   }
 
   /** List or switch the agent. */

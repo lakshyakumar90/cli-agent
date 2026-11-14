@@ -176,6 +176,96 @@ describe("the interactive session", () => {
     expect(out.text).toContain("permission mode:");
     expect(out.text).toContain("auto-edit");
   });
+
+  it("runs a command of the user's own", async () => {
+    const input = new PassThrough();
+    const out = collector();
+    const asked: string[] = [];
+
+    const provider: Provider = {
+      id: "test",
+      models: async () => [],
+      async *stream(request: StreamRequest): AsyncGenerator<Event> {
+        const last = request.messages[request.messages.length - 1];
+        asked.push(
+          last === undefined || last.role !== "user" ? "" : last.content,
+        );
+        yield { t: "text", delta: "deployed" };
+        yield {
+          t: "done",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          stop: "end",
+        };
+      },
+    };
+
+    const ui = new InteractiveUi({
+      state: stateWith(provider),
+      out,
+      err: collector(),
+      input,
+      model: "test/test-model",
+      permissionMode: "ask",
+      cwd: process.cwd(),
+      commands: [
+        {
+          name: "/deploy",
+          description: "Deploy the app",
+          argumentHint: "<where>",
+          path: "/tmp/deploy.md",
+          content: "Deploy to $1.",
+        },
+      ],
+    });
+
+    const running = ui.run();
+    input.write("/deploy staging\n");
+    await wait(500);
+    input.write("/exit\n");
+
+    await running;
+
+    // The command sent its own prompt, with the argument in it.
+    expect(asked.some((prompt) => prompt.includes("Deploy to staging."))).toBe(
+      true,
+    );
+    expect(out.text).toContain("deployed");
+  });
+
+  it("lists the commands, and the ones of the user", async () => {
+    const input = new PassThrough();
+    const out = collector();
+
+    const ui = new InteractiveUi({
+      state: stateWith(slowProvider()),
+      out,
+      err: collector(),
+      input,
+      model: "test/test-model",
+      permissionMode: "ask",
+      cwd: process.cwd(),
+      commands: [
+        {
+          name: "/deploy",
+          description: "Deploy the app",
+          argumentHint: "<where>",
+          path: "/tmp/deploy.md",
+          content: "Deploy to $1.",
+        },
+      ],
+    });
+
+    const running = ui.run();
+    input.write("/help\n");
+    await wait(300);
+    input.write("/exit\n");
+
+    await running;
+
+    expect(out.text).toContain("/model");
+    expect(out.text).toContain("/deploy");
+    expect(out.text).toContain("Deploy the app");
+  });
 });
 
 
