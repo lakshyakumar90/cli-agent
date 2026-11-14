@@ -27,6 +27,12 @@ out/
 build
 dist
 
+# The agent's own state: what it is doing now, not what the project is.
+# The roles, the commands, the hooks and the MCP servers of .myagent are
+# worth keeping - the board and the worktrees are not.
+.myagent/board.json
+.myagent/worktrees/
+
 
 # Debug
 npm-debug.log*
