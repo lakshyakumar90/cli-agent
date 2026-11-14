@@ -16,3 +16,4 @@ export * from "./grep.js";
 export * from "./glob.js";
 export * from "./todo.js";
 export * from "./tools.js";
+export * from "./mcp.js";
