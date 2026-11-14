@@ -12,6 +12,7 @@ import { lookupModel, type ModelInfo } from "@cli-agent/ai";
 import type { AgentState } from "@cli-agent/core";
 import { run } from "@cli-agent/core";
 import type { CheckpointStore, SessionStore } from "@cli-agent/core";
+import type { AgentRole } from "@cli-agent/core";
 import { createBashTool } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
@@ -69,6 +70,8 @@ export interface InteractiveOptions {
   checkpoints?: CheckpointStore;
   /** The agents that can be switched to. */
   agents?: Array<{ name: string; model: string; description?: string }>;
+  /** The roles the agent can delegate to. */
+  roles?: Map<string, AgentRole>;
 }
 
 /** The key that folds the last tool block. */
@@ -431,18 +434,30 @@ export class InteractiveUi {
   /** List or switch the agent. */
   private async switchAgent(args: string): Promise<void> {
     const agents = this.options.agents ?? [];
-    if (agents.length === 0) {
+    const roles = this.options.roles;
+
+    if (agents.length === 0 && (roles === undefined || roles.size === 0)) {
       this.write(dim("no other agents are configured\n"));
       return;
     }
 
     if (args.length === 0) {
-      this.write(`${bold("agents")}\n`);
-      for (const agent of agents) {
-        const mark = agent.name === "main" ? green("●") : " ";
-        this.write(
-          `${mark} ${agent.name}  ${dim(agent.description ?? agent.model)}\n`,
-        );
+      if (roles !== undefined && roles.size > 0) {
+        this.write(`${bold("the agents you can delegate to")}\n`);
+        for (const [name, role] of roles) {
+          this.write(
+            `  ${name}  ${dim(role.description ?? role.model ?? "")}\n`,
+          );
+        }
+      }
+      if (agents.length > 0) {
+        this.write(`${bold("agents")}\n`);
+        for (const agent of agents) {
+          const mark = agent.name === "main" ? green("●") : " ";
+          this.write(
+            `${mark} ${agent.name}  ${dim(agent.description ?? agent.model)}\n`,
+          );
+        }
       }
       this.write(dim("\n/agents <name> to switch\n"));
       return;

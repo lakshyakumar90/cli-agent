@@ -58,7 +58,7 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const { state, store, sessionId } = built;
+  const { state, store, sessionId, roles } = built;
 
   switch (options.mode) {
     case "print":
@@ -100,6 +100,7 @@ async function main(): Promise<number> {
         store,
         checkpoints: state.checkpoints,
         agents: await loadAgents(),
+        roles,
         onModel: async (ref) => {
           try {
             const provider = await createProvider(ref.split("/")[0] as string);

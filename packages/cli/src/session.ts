@@ -21,8 +21,13 @@ import {
 import {
   CheckpointStore,
   createState,
+  loadRoles,
   SessionStore,
+  Board,
+  boardPath,
+  createTaskTool,
   type AgentState,
+  type AgentRole,
 } from "@cli-agent/core";
 
 export interface SessionOptions {
@@ -46,6 +51,12 @@ export interface SessionOptions {
   continueLast?: boolean;
   /** Open a session by id. */
   resume?: string;
+  /** The roles the agents can be. */
+  roles?: Map<string, AgentRole>;
+  /** The board the tasks are written to. */
+  board?: Board;
+  /** The tokens one worker may use. */
+  workerTokenBudget?: number;
 }
 
 export interface Session {
@@ -59,6 +70,10 @@ export interface Session {
   store: SessionStore;
   /** The session that is open. */
   sessionId?: string;
+  /** The roles the agents can be. */
+  roles: Map<string, AgentRole>;
+  /** The board the tasks are written to. */
+  board: Board;
 }
 
 /** The provider id of a "provider/model" ref. */
@@ -109,14 +124,33 @@ export async function createSession(
 
   const messages = await store.transcript(sessionId);
 
+  // The roles the agents can be, and the board they write to.
+  const roles = options.roles ?? (await loadRoles({ cwd: options.cwd }));
+  const board = options.board ?? new Board({ path: boardPath(options.cwd) });
+  await board.load();
+
+  // The task tool: how the agent delegates.
+  const task = createTaskTool({
+    roles,
+    providerFor: async (workerModel) =>
+      createProvider(providerIdOf(workerModel), options.factory ?? {}),
+    defaultModel: options.model,
+    tools,
+    cwd: options.cwd,
+    board,
+    ...(options.workerTokenBudget === undefined
+      ? {}
+      : { tokenBudget: options.workerTokenBudget }),
+  });
+
   const state = createState(provider, {
     model,
-    tools,
+    tools: [...tools, task],
     messages,
     cwd: options.cwd,
     journal: store,
     checkpoints: new CheckpointStore(),
   });
 
-  return { provider, tools, state, store, sessionId };
+  return { provider, tools: state.tools, state, store, sessionId, roles, board };
 }
