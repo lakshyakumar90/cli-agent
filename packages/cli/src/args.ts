@@ -26,6 +26,10 @@ export interface CliOptions {
   rules: PermissionRule[];
   /** Show the tool activity as well as the answer. */
   verbose: boolean;
+  /** Carry on with the last session of this directory. */
+  continueLast: boolean;
+  /** Open a session: named, or the newest one. */
+  resume?: string;
 }
 
 /** The model used when nothing says otherwise. */
@@ -53,6 +57,8 @@ Options:
       --ask <rule>               always ask about a call
       --json                     write the events as JSON lines
       --rpc                      read and write JSON lines
+      --continue                 carry on with the last session here
+      --resume [id]              open a session (the newest one when none is named)
   -v, --verbose                  show the tool activity
   -h, --help                     this text
 `;
@@ -66,11 +72,13 @@ export function parseArgs(argv: string[]): ParseResult {
     permissionMode: "ask",
     rules: [],
     verbose: false,
+    continueLast: false,
   };
 
   let json = false;
   let rpc = false;
   let print: string | undefined;
+  let resume: string | undefined;
   const rest: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -95,6 +103,21 @@ export function parseArgs(argv: string[]): ParseResult {
       case "--json":
         json = true;
         break;
+
+      case "--continue":
+        options.continueLast = true;
+        break;
+
+      case "--resume": {
+        // The session to open; the newest one when nothing is named.
+        const value = argv[index + 1];
+        if (value !== undefined && !value.startsWith("-")) {
+          resume = value;
+          index += 1;
+        }
+        options.resume = resume ?? "";
+        break;
+      }
 
       case "--rpc":
         rpc = true;
@@ -177,7 +200,6 @@ export function parseArgs(argv: string[]): ParseResult {
 
   return { ok: true, options };
 }
-
 /** Is this one of the permission modes? */
 export function isPermissionMode(value: string): value is PermissionMode {
   return (

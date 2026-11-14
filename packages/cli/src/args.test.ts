@@ -81,6 +81,37 @@ describe("parseArgs", () => {
     if (result.ok) expect(result.options.permissionMode).toBe("plan");
   });
 
+  it("carries on with the last session", () => {
+    const result = parseArgs(["--continue"]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.options.continueLast).toBe(true);
+  });
+
+  it("opens a session by name", () => {
+    const result = parseArgs(["--resume", "s123"]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.options.resume).toBe("s123");
+  });
+
+  it("opens the newest session when none is named", () => {
+    const result = parseArgs(["--resume"]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.options.resume).toBe("");
+  });
+
+  it("does not take the next option as a session name", () => {
+    const result = parseArgs(["--resume", "--json"]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.options.resume).toBe("");
+      expect(result.options.mode).toBe("json");
+    }
+  });
+
   it("refuses a permission mode it does not know", () => {
     const result = parseArgs(["--mode", "whatever"]);
 

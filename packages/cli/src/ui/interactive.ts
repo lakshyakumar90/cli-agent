@@ -11,6 +11,7 @@ import type { Msg, Provider, Usage } from "@cli-agent/ai";
 import { lookupModel, type ModelInfo } from "@cli-agent/ai";
 import type { AgentState } from "@cli-agent/core";
 import { run } from "@cli-agent/core";
+import type { CheckpointStore, SessionStore } from "@cli-agent/core";
 import { createBashTool } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
@@ -62,6 +63,10 @@ export interface InteractiveOptions {
   };
   /** The id of this session, for saving it. */
   sessionId?: string;
+  /** Where the conversation is written down. */
+  store?: SessionStore;
+  /** The snapshots that make an edit undoable. */
+  checkpoints?: CheckpointStore;
   /** The agents that can be switched to. */
   agents?: Array<{ name: string; model: string; description?: string }>;
 }
@@ -219,9 +224,107 @@ export class InteractiveUi {
       case "/agents":
         await this.switchAgent(args);
         return;
+      case "/fork":
+        await this.fork(args);
+        return;
+      case "/tree":
+        await this.tree();
+        return;
+      case "/undo":
+        await this.undo(args);
+        return;
       default:
         return;
     }
+  }
+
+  /** Branch the conversation from an earlier message. */
+  private async fork(args: string): Promise<void> {
+    const store = this.options.store;
+    const sessionId = this.options.sessionId;
+    if (store === undefined || sessionId === undefined) {
+      this.write(dim("this session is not being written down\n"));
+      return;
+    }
+
+    const entries = await store.read(sessionId);
+    if (entries.length === 0) {
+      this.write(dim("there is nothing to fork from\n"));
+      return;
+    }
+
+    // Without an entry named, fork from the last one.
+    const from =
+      args.length > 0
+        ? entries.find((entry) => entry.id === args)
+        : entries[entries.length - 1];
+
+    if (from === undefined) {
+      this.write(`${red(`no message called ${args}`)}\n`);
+      return;
+    }
+
+    const forked = await store.fork(sessionId, from.id, { model: this.model });
+    if (forked === undefined) {
+      this.write(`${red("could not fork from that message")}\n`);
+      return;
+    }
+
+    this.options.sessionId = forked;
+    this.write(`${green("forked")} ${dim(`${sessionId} -> ${forked}`)}\n`);
+  }
+
+  /** The branches of this conversation. */
+  private async tree(): Promise<void> {
+    const store = this.options.store;
+    const sessionId = this.options.sessionId;
+    if (store === undefined || sessionId === undefined) {
+      this.write(dim("this session is not being written down\n"));
+      return;
+    }
+
+    const roots = await store.tree(sessionId);
+    if (roots.length === 0) {
+      this.write(dim("the conversation is empty\n"));
+      return;
+    }
+
+    this.write(`${bold("the conversation")}\n`);
+    const show = (nodes: typeof roots, depth: number): void => {
+      for (const node of nodes) {
+        const text =
+          node.entry.msg.role === "user"
+            ? node.entry.msg.content
+            : node.entry.msg.role === "tool"
+              ? `tool ${node.entry.msg.callId}`
+              : "the model answered";
+        this.write(
+          `${"  ".repeat(depth)}${dim(node.entry.id)} ${String(text).slice(0, 60)}\n`,
+        );
+        show(node.children, depth + 1);
+      }
+    };
+    show(roots, 1);
+  }
+
+  /** Undo the last change to a file. */
+  private async undo(args: string): Promise<void> {
+    const checkpoints = this.options.checkpoints;
+    if (checkpoints === undefined) {
+      this.write(dim("nothing is being checkpointed\n"));
+      return;
+    }
+
+    const path = args.length > 0 ? args : undefined;
+    const undone = await checkpoints.undo(path);
+    if (undone === undefined) {
+      this.write(dim("there is nothing to undo\n"));
+      return;
+    }
+
+    this.write(
+      `${green("undone")} ${dim(`${undone.checkpoint.path} (${undone.checkpoint.callId})`)}\n`,
+    );
   }
 
   /** Show or change the model. */

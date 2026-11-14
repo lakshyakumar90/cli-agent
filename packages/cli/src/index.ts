@@ -8,7 +8,6 @@ import { createSession } from "./session.js";
 import { InteractiveUi } from "./ui/interactive.js";
 import { setColors, shouldUseColors } from "./ui/colors.js";
 import { loadAgents } from "./agents.js";
-import { SessionStore, newSessionId } from "./sessions.js";
 import { createProvider } from "@cli-agent/ai";
 import { AuthManager } from "@cli-agent/ai";
 import type { AskPermission } from "@cli-agent/tools";
@@ -41,21 +40,25 @@ async function main(): Promise<number> {
     return answer.startsWith("y") ? "allow" : "deny";
   };
 
-  let state;
+  let built;
   try {
-    ({ state } = await createSession({
+    built = await createSession({
       model: options.model,
       cwd: options.cwd,
       permissionMode: options.permissionMode,
       rules: options.rules,
       ask: askPermission,
-    }));
+      continueLast: options.continueLast,
+      ...(options.resume === undefined ? {} : { resume: options.resume }),
+    });
   } catch (error) {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`,
     );
     return 1;
   }
+
+  const { state, store, sessionId } = built;
 
   switch (options.mode) {
     case "print":
@@ -85,7 +88,6 @@ async function main(): Promise<number> {
 
     case "interactive":
     default: {
-      const store = new SessionStore();
       const ui = new InteractiveUi({
         state,
         out: process.stdout,
@@ -94,8 +96,9 @@ async function main(): Promise<number> {
         model: options.model,
         permissionMode: options.permissionMode,
         cwd: options.cwd,
-        sessionId: newSessionId(),
-        sessions: store,
+        sessionId,
+        store,
+        checkpoints: state.checkpoints,
         agents: await loadAgents(),
         onModel: async (ref) => {
           try {
@@ -111,7 +114,7 @@ async function main(): Promise<number> {
         onLogin: async (provider) => {
           const auth = new AuthManager();
           try {
-            const result = await auth.login(provider);
+            await auth.login(provider);
             return `signed in to ${provider}`;
           } catch (error) {
             return error instanceof Error ? error.message : String(error);

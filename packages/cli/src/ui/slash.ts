@@ -15,6 +15,9 @@ export const SLASH_COMMANDS = [
   { name: "/clear", description: "start a new conversation" },
   { name: "/resume", description: "go back to an earlier conversation" },
   { name: "/agents", description: "list or switch the agent" },
+  { name: "/fork", description: "branch the conversation from an earlier message" },
+  { name: "/tree", description: "show the branches of this conversation" },
+  { name: "/undo", description: "undo the last change to a file" },
 ] as const;
 
 export type SlashName = (typeof SLASH_COMMANDS)[number]["name"];

@@ -23,7 +23,7 @@ describe("slash commands", () => {
     expect(parseSlash("hello")).toBeUndefined();
   });
 
-  it("knows the six commands", () => {
+  it("knows the commands", () => {
     expect(SLASH_COMMANDS.map((command) => command.name)).toEqual([
       "/model",
       "/login",
@@ -31,6 +31,9 @@ describe("slash commands", () => {
       "/clear",
       "/resume",
       "/agents",
+      "/fork",
+      "/tree",
+      "/undo",
     ]);
   });
 
