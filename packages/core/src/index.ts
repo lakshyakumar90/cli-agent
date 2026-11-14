@@ -19,6 +19,7 @@ export * from "./render.js";
 export * from "./subagent.js";
 export * from "./agents/roles.js";
 export * from "./agents/board.js";
+export * from "./agents/isolation.js";
 
 
 
