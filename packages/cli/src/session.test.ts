@@ -120,4 +120,34 @@ describe("the session", () => {
     expect(names).toContain("task");
     expect(names).toContain("read");
   });
+
+  it("opens without credentials, and says what is missing", async () => {
+    const session = await createSession({
+      model: "nothing/model",
+      cwd: directory,
+      permissionMode: "yolo",
+      factory: { env: {} },
+    });
+
+    // The session is open: the user may be signing in, or looking at what
+    // the agent can do.
+    expect(session.missing).toBeDefined();
+    expect(session.missing?.provider).toBe("nothing");
+    expect(session.missing?.message).toContain("no provider");
+
+    // And the first request says the same thing.
+    await expect(
+      (async () => {
+        for await (const _event of session.provider.stream({
+          model: "nothing",
+          system: "",
+          messages: [],
+          tools: [],
+          signal: new AbortController().signal,
+        })) {
+          // nothing
+        }
+      })(),
+    ).rejects.toThrow(/no provider/);
+  });
 });

@@ -7,7 +7,10 @@
  */
 
 import {
+  AuthError,
   createProvider,
+  missingProvider,
+  ProviderError,
   type Provider,
   type ProviderFactoryOptions,
 } from "@cli-agent/ai";
@@ -117,6 +120,14 @@ export interface Session {
   /** What the extensions added. */
   extensions: LoadedExtensions;
   /**
+   * What is missing, when something is.
+   *
+   * The session opens even when there are no credentials: the user may be
+   * signing in, or looking at what the agent can do. The first request
+   * says what is missing.
+   */
+  missing?: { provider: string; message: string };
+  /**
    * Shut the session down.
    *
    * The MCP servers are processes of their own: they have to be stopped,
@@ -129,6 +140,18 @@ export interface Session {
 export function providerIdOf(ref: string): string {
   const slash = ref.indexOf("/");
   return slash <= 0 ? ref : ref.slice(0, slash);
+}
+
+/**
+ * Is this "there is no credential" or "there is no such provider"?
+ *
+ * Both are things the user can fix from the session: the first with a
+ * key, the second with a different name.
+ */
+function isMissingProvider(error: unknown): boolean {
+  if (error instanceof AuthError) return error.code === "config";
+  if (error instanceof ProviderError) return error.code === "protocol";
+  return false;
 }
 
 /** The model id of a "provider/model" ref. */
@@ -186,8 +209,26 @@ export async function createSession(
     providers: extensions.providers,
   };
 
-  const provider =
-    options.provider ?? (await createProvider(providerId, factory));
+  // The provider. When there is no credential the session still opens:
+  // the first request says what is missing.
+  let provider = options.provider;
+  let missing: { provider: string; message: string } | undefined;
+
+  if (provider === undefined) {
+    try {
+      provider = await createProvider(providerId, factory);
+    } catch (error) {
+      // A missing credential, or a provider nobody knows: neither is a
+      // reason to close the door. The session opens and says what is
+      // missing, so the user can sign in and carry on.
+      if (!isMissingProvider(error)) throw error;
+      missing = {
+        provider: providerId,
+        message: error instanceof Error ? error.message : String(error),
+      };
+      provider = missingProvider(providerId, missing.message);
+    }
+  }
 
   // The tools of the MCP servers, if there are any.
   const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
@@ -290,6 +331,7 @@ export async function createSession(
     mcp,
     commands,
     extensions,
+    ...(missing === undefined ? {} : { missing }),
     async close() {
       // The servers are processes: they have to be stopped, or the agent
       // never finishes.
