@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { stripAnsi } from "./colors.js";
-import { box, contextShare, renderHeader, spinnerFrame } from "./frame.js";
+import {
+  box,
+  contextShare,
+  renderFooter,
+  renderHeader,
+  renderWelcome,
+  rule,
+  spinnerFrame,
+} from "./frame.js";
 
 describe("the box", () => {
   it("has a line for everything that is in it", () => {
@@ -9,10 +17,19 @@ describe("the box", () => {
     const lines = stripAnsi(drawn).split("\n");
 
     expect(lines).toHaveLength(4);
-    expect(lines[0]).toMatch(/^┌─+┐$/);
-    expect(lines[3]).toMatch(/^└─+┘$/);
+    expect(lines[0]).toMatch(/^╭─+╮$/);
+    expect(lines[3]).toMatch(/^╰─+╯$/);
     expect(lines[1]).toContain("one");
     expect(lines[2]).toContain("two");
+  });
+
+  it("has a title and a hint", () => {
+    const drawn = stripAnsi(
+      box(["one"], { title: "Select Model", hint: "enter select · esc back" }),
+    );
+
+    expect(drawn).toContain("Select Model");
+    expect(drawn).toContain("enter select · esc back");
   });
 
   it("is as wide as the longest line", () => {
@@ -33,7 +50,7 @@ describe("the box", () => {
   });
 
   it("does not count the colours as width", () => {
-    const drawn = stripAnsi(box(["\u001b[31mred\u001b[0m"]));
+    const drawn = stripAnsi(box(["[31mred[0m"]));
 
     const lines = drawn.split("\n");
     const widths = new Set(lines.map((line) => line.length));
@@ -43,15 +60,61 @@ describe("the box", () => {
 });
 
 describe("the header", () => {
-  it("says the model and the directory", () => {
+  it("says the name, the version and the directory", () => {
     const header = stripAnsi(
-      renderHeader({ model: "openrouter/some/model:free", cwd: "/work" }),
+      renderHeader({
+        model: "openrouter/some/model:free",
+        cwd: "/work",
+        version: "0.1.0",
+      }),
     );
 
     expect(header).toContain("agent");
-    expect(header).toContain("openrouter/some/model:free");
+    expect(header).toContain("0.1.0");
     expect(header).toContain("/work");
-    expect(header).toContain("/model to change");
+  });
+});
+
+describe("the welcome", () => {
+  it("offers the commands", () => {
+    const welcome = stripAnsi(
+      renderWelcome([
+        { name: "/model", description: "choose the model" },
+        { name: "/help", description: "the commands" },
+      ]),
+    );
+
+    expect(welcome).toContain("To get started");
+    expect(welcome).toContain("/model");
+    expect(welcome).toContain("choose the model");
+    expect(welcome).toContain("/help");
+  });
+});
+
+describe("the rule", () => {
+  it("is as wide as it is told", () => {
+    expect(stripAnsi(rule(20)).length).toBe(20);
+  });
+});
+
+describe("the footer", () => {
+  it("says what is where on the left, and what to press on the right", () => {
+    const footer = stripAnsi(
+      renderFooter({
+        model: "gpt-6.1-sol",
+        cwd: "/work",
+        turns: 2,
+        permissionMode: "ask",
+        hints: ["? for shortcuts"],
+        width: 80,
+      }),
+    );
+
+    expect(footer).toContain("gpt-6.1-sol");
+    expect(footer).toContain("/work");
+    expect(footer).toContain("? for shortcuts");
+    // The right side is at the end.
+    expect(footer.trimEnd().endsWith("? for shortcuts")).toBe(true);
   });
 });
 

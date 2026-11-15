@@ -3,7 +3,8 @@ import { lookupModel } from "@cli-agent/ai";
 import { color, stripAnsi, widthOf } from "./colors.js";
 import { inline, MarkdownStream, renderMarkdown } from "./markdown.js";
 import { diffLines, renderDiff } from "./diff.js";
-import { formatTokens, renderStatus, renderToolBlock } from "./status.js";
+import { formatTokens, renderToolBlock } from "./status.js";
+import { renderFooter } from "./frame.js";
 
 describe("colors", () => {
   it("puts a colour on the text", () => {
@@ -92,13 +93,14 @@ describe("diffs", () => {
   });
 });
 
-describe("the status line", () => {
+describe("the footer", () => {
   it("says the model, the usage and the mode", () => {
     const status = stripAnsi(
-      renderStatus({
+      renderFooter({
         model: "claude-sonnet-5-5",
         usage: { inputTokens: 1200, outputTokens: 340 },
         permissionMode: "ask",
+        width: 100,
       }),
     );
 
@@ -116,12 +118,16 @@ describe("the status line", () => {
 
   it("says what the session has cost", () => {
     const status = stripAnsi(
-      renderStatus({
+      renderFooter({
         model: "gemini-3.1-flash-lite",
+        cwd: "/work",
         usage: { inputTokens: 10_000, outputTokens: 2_000 },
         info: lookupModel("gemini", "gemini-3.1-flash-lite"),
-        permissionMode: "ask",
         turns: 4,
+        left: { used: 1_000, total: 10_000 },
+        permissionMode: "ask",
+        hints: ["? for shortcuts"],
+        width: 100,
       }),
     );
 
@@ -129,7 +135,9 @@ describe("the status line", () => {
     // cost.
     expect(status).toContain("10.0k in");
     expect(status).toContain("$");
+    expect(status).toContain("90% left");
     expect(status).toContain("4 turns");
+    expect(status).toContain("? for shortcuts");
   });
 });
 

@@ -22,9 +22,13 @@ import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
 import { completeFile, completePath, wordAt } from "./complete.js";
 import {
+  renderFooter,
   renderHeader,
+  renderWelcome,
+  rule,
   spinnerFrame,
   type ContextLeft,
+  type WelcomeCommand,
 } from "./frame.js";
 import { Picker, type PickerItem } from "./picker.js";
 import { MarkdownStream } from "./markdown.js";
@@ -37,7 +41,6 @@ import {
 } from "./slash.js";
 import {
   permissionLabel,
-  renderStatus,
   renderToolBlock,
   renderToolResult,
   type ToolBlock,
@@ -168,15 +171,38 @@ export class InteractiveUi {
         void this.drain().then(() => resolve(0));
       });
 
-      // The header says where the agent is.
+      // The header says where the agent is, and the welcome says what it
+      // can do.
       this.write(`${renderHeader({
         model: this.model,
         cwd: this.options.cwd,
+        version: "0.1.0",
       })}\n\n`);
+      this.write(`${renderWelcome(this.welcomeCommands())}\n\n`);
 
       this.rl.setPrompt(this.promptText());
       this.rl.prompt();
     });
+  }
+
+  /** The commands the welcome offers. */
+  private welcomeCommands(): WelcomeCommand[] {
+    const chosen: WelcomeCommand[] = [
+      { name: "/model", description: "choose the model" },
+      { name: "/permissions", description: "choose what the agent may do" },
+      { name: "/agents", description: "the agents it can delegate to" },
+      { name: "/help", description: "the commands, and the keys" },
+    ];
+
+    const custom = this.options.commands ?? [];
+    for (const command of custom) {
+      chosen.push({
+        name: command.name,
+        description: command.description ?? "a command of your own",
+      });
+    }
+
+    return chosen;
   }
 
   /**
@@ -193,6 +219,12 @@ export class InteractiveUi {
       while (this.pending.length > 0) {
         const line = (this.pending.shift() ?? "").trim();
         if (line.length > 0) await this.handleLine(line);
+
+        // The field closes, and the line under it says where the agent is.
+        if (!this.closed) {
+          this.write(`${rule()}\n`);
+          this.write(`${renderFooter(this.footerInput())}\n`);
+        }
 
         if (!this.closed) {
           this.rl.setPrompt(this.promptText());
@@ -274,6 +306,9 @@ export class InteractiveUi {
     switch (name) {
       case "/model":
         await this.switchModel(args);
+        return;
+      case "/permissions":
+        this.switchPermissions();
         return;
       case "/login":
         await this.login(args);
@@ -535,6 +570,14 @@ export class InteractiveUi {
     } catch {
       return [];
     }
+  }
+
+  /** Change how much the agent may do on its own. */
+  private switchPermissions(): void {
+    this.permissionMode = nextPermissionMode(this.permissionMode);
+    this.write(
+      `${dim("permission mode:")} ${permissionLabel(this.permissionMode)}\n`,
+    );
   }
 
   /** Sign in to a provider. */
@@ -832,7 +875,6 @@ export class InteractiveUi {
 
     await this.save();
     this.write("\n");
-    this.write(`${renderStatus(this.statusInput())}\n`);
   }
 
   /**
@@ -870,6 +912,10 @@ export class InteractiveUi {
    *
    * It says the agent is working, and it steps aside as soon as there is
    * something to show: the answer, or a tool that is running.
+   *
+   * It is one line, and it turns where it is: the frame is written and the
+   * cursor is left on the line below it, so the next frame takes the line
+   * back rather than pushing it down.
    */
   private startSpinner(): { stop: () => void } {
     let step = 0;
@@ -877,10 +923,9 @@ export class InteractiveUi {
     let drawn = false;
 
     const draw = (): void => {
-      // The line is taken away and put again: the spinner turns where it
-      // is, not on a new line.
-      if (drawn) this.write(`\x1b[1A\r\x1b[2K`);
-      this.write(`${cyan(spinnerFrame(step))} ${dim("working")}`);
+      // The line is taken away and put again.
+      if (drawn) this.write("\x1b[1A\r\x1b[2K");
+      this.write(`${cyan(spinnerFrame(step))} ${dim("working")}\n`);
       drawn = true;
       step += 1;
     };
@@ -893,6 +938,7 @@ export class InteractiveUi {
         if (timer !== undefined) clearInterval(timer);
         timer = undefined;
         if (!drawn) return;
+        // The spinner is one line above the cursor: take it away.
         this.write("\x1b[1A\r\x1b[2K");
         drawn = false;
       },
@@ -917,9 +963,36 @@ export class InteractiveUi {
     return { used, total };
   }
 
-  /** The prompt, with the permission mode in it. */
+  /** The prompt, with the field it sits in. */
   private promptText(): string {
-    return `${permissionLabel(this.permissionMode)} ${bold("›")} `;
+    return `${rule()}\n${cyan(">")} `;
+  }
+
+  /** What the line under the field says. */
+  private footerInput(): {
+    model: string;
+    cwd: string;
+    usage?: Usage;
+    info?: ModelInfo;
+    turns: number;
+    left?: ContextLeft;
+    permissionMode: string;
+    hints: string[];
+  } {
+    const provider = this.model.split("/")[0] as string;
+    const info = lookupModel(provider, modelIdOf(this.model));
+    const left = this.contextLeft();
+
+    return {
+      model: modelIdOf(this.model),
+      cwd: this.options.cwd,
+      ...(this.turns === 0 ? {} : { usage: this.total }),
+      ...(info === undefined ? {} : { info }),
+      turns: this.turns,
+      ...(left === undefined ? {} : { left }),
+      permissionMode: this.permissionMode,
+      hints: ["? for shortcuts", "esc interrupts"],
+    };
   }
 
   /** Write to the terminal. */

@@ -9,12 +9,13 @@ import type { PermissionMode } from "@cli-agent/tools";
 
 /** The commands the agent understands. */
 export const SLASH_COMMANDS = [
-  { name: "/model", description: "show or change the model" },
+  { name: "/model", description: "choose the model" },
+  { name: "/permissions", description: "choose what the agent may do" },
   { name: "/login", description: "sign in to a provider" },
   { name: "/compact", description: "summarise the conversation" },
   { name: "/clear", description: "start a new conversation" },
   { name: "/resume", description: "go back to an earlier conversation" },
-  { name: "/agents", description: "list or switch the agent" },
+  { name: "/agents", description: "the agents it can delegate to" },
   { name: "/fork", description: "branch the conversation from an earlier message" },
   { name: "/tree", description: "show the branches of this conversation" },
   { name: "/undo", description: "undo the last change to a file" },

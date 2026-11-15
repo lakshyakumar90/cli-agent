@@ -26,6 +26,7 @@ describe("slash commands", () => {
   it("knows the commands", () => {
     expect(SLASH_COMMANDS.map((command) => command.name)).toEqual([
       "/model",
+      "/permissions",
       "/login",
       "/compact",
       "/clear",

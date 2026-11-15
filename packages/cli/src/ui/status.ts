@@ -1,68 +1,12 @@
 /**
- * The status line, and the tool blocks.
+ * The tool blocks.
  *
- * The status line says where the agent is: the model, what it has spent,
- * what it cost, and how much it may do on its own.
+ * A tool call is a line: what it was asked to do, and whether it worked.
+ * The line folds, so a long output does not fill the screen.
  */
 
-import type { Usage } from "@cli-agent/ai";
-import { estimateCost } from "@cli-agent/ai";
-import type { ModelInfo } from "@cli-agent/ai";
 import { bold, cyan, dim, gray, green, red, yellow } from "./colors.js";
-import { contextShare, type ContextLeft } from "./frame.js";
 import { renderReplacement } from "./diff.js";
-
-export interface StatusInput {
-  /** The model the agent is using. */
-  model: string;
-  /** What the last turn used. */
-  usage?: Usage;
-  /** What the model table says the model costs. */
-  info?: ModelInfo;
-  /** How much the agent may do without asking. */
-  permissionMode: string;
-  /** How many turns have run. */
-  turns?: number;
-  /** How much of the context is left. */
-  left?: ContextLeft;
-}
-
-/** The status line. */
-export function renderStatus(input: StatusInput): string {
-  const parts: string[] = [cyan(input.model)];
-
-  if (input.usage !== undefined) {
-    parts.push(
-      dim(
-        `${formatTokens(input.usage.inputTokens)} in / ${formatTokens(
-          input.usage.outputTokens,
-        )} out`,
-      ),
-    );
-
-    const cost =
-      input.info === undefined
-        ? undefined
-        : estimateCost(input.usage, input.info);
-    if (cost !== undefined) parts.push(dim(`$${cost.toFixed(4)}`));
-  }
-
-  if (input.turns !== undefined) parts.push(dim(`${input.turns} turns`));
-
-  // How much of the context is left, so the user knows when the
-  // conversation is about to be summarised.
-  const left = contextShare(input.left);
-  if (left !== undefined) {
-    const percent = Math.round(left * 100);
-    const paint = percent <= 15 ? red : percent <= 35 ? yellow : green;
-    parts.push(paint(`${percent}% context left`));
-  }
-
-  parts.push(permissionLabel(input.permissionMode));
-  parts.push(gray("? for shortcuts"));
-
-  return parts.join(dim(" · "));
-}
 
 /** The permission mode, in colour. */
 export function permissionLabel(mode: string): string {
@@ -79,11 +23,7 @@ export function permissionLabel(mode: string): string {
 }
 
 /** Token counts, in a readable shape. */
-export function formatTokens(tokens: number): string {
-  if (tokens < 1000) return String(tokens);
-  if (tokens < 1_000_000) return `${(tokens / 1000).toFixed(1)}k`;
-  return `${(tokens / 1_000_000).toFixed(1)}M`;
-}
+export { formatTokens } from "./frame.js";
 
 /** One tool call, as the terminal shows it. */
 export interface ToolBlock {
