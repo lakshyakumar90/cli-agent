@@ -133,7 +133,7 @@ async function main(): Promise<number> {
           out: process.stdout,
           err: process.stderr,
           input,
-          model: options.model,
+          model,
           permissionMode: options.permissionMode,
           cwd: options.cwd,
           sessionId,

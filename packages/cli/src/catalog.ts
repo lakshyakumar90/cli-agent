@@ -10,6 +10,9 @@
  * from day to day, and writing it down here would only make it wrong.
  */
 
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   AuthManager,
   createProvider,
@@ -70,6 +73,10 @@ export interface CatalogOptions {
   store?: import("@cli-agent/ai").AuthStore;
   /** How the providers are built. */
   factory?: ProviderFactoryOptions;
+  /** Providers that are already built, by id. */
+  providers?: Map<string, Provider>;
+  /** Where the free model is remembered. */
+  rememberPath?: string;
 }
 
 /**
@@ -149,6 +156,9 @@ async function build(
   provider: string,
   options: CatalogOptions,
 ): Promise<Provider | undefined> {
+  const already = options.providers?.get(provider);
+  if (already !== undefined) return already;
+
   try {
     return await createProvider(provider, options.factory ?? {});
   } catch {
@@ -169,11 +179,16 @@ async function listModels(provider: Provider): Promise<ModelInfo[]> {
  * The free model to use by default.
  *
  * The list is asked of OpenRouter, so the default is one that exists
- * today. When it cannot be reached, the fallback is used.
+ * today. It is remembered for an hour: the list does not change from one
+ * minute to the next, and a second of waiting at every start is a second
+ * of waiting too often.
  */
 export async function defaultFreeModel(
   options: CatalogOptions = {},
 ): Promise<string> {
+  const remembered = await readRemembered(options.rememberPath);
+  if (remembered !== undefined) return remembered;
+
   const built = await build("openrouter", options);
   if (built === undefined) return FALLBACK_FREE_MODEL;
 
@@ -181,10 +196,65 @@ export async function defaultFreeModel(
   if (free.length === 0) return FALLBACK_FREE_MODEL;
 
   const ids = free.map((model) => model.id);
+
+  // The first one that suits the work. The fallback is not used as a
+  // marker here: it may well be the one that is preferred.
+  let chosen: string | undefined;
   for (const preferred of PREFERRED_FREE) {
-    if (ids.includes(preferred)) return `openrouter/${preferred}`;
+    if (ids.includes(preferred)) {
+      chosen = `openrouter/${preferred}`;
+      break;
+    }
   }
 
-  const first = ids[0];
-  return first === undefined ? FALLBACK_FREE_MODEL : `openrouter/${first}`;
+  if (chosen === undefined) {
+    const first = ids[0];
+    chosen = first === undefined ? FALLBACK_FREE_MODEL : `openrouter/${first}`;
+  }
+
+  await remember(chosen, options.rememberPath);
+  return chosen;
+}
+
+/** How long the list of free models is remembered. */
+const REMEMBER_MS = 60 * 60 * 1000;
+
+/** Where the list is remembered. */
+function rememberPath(options?: string): string {
+  return options ?? join(homedir(), ".myagent", "free-models.json");
+}
+
+/** The model that was remembered, when it is still fresh. */
+async function readRemembered(path?: string): Promise<string | undefined> {
+  try {
+    const raw = await readFile(rememberPath(path), "utf8");
+    const parsed = JSON.parse(raw) as { at?: unknown; model?: unknown };
+
+    if (typeof parsed.model !== "string" || parsed.model.length === 0) {
+      return undefined;
+    }
+    if (typeof parsed.at !== "string") return undefined;
+
+    const age = Date.now() - Date.parse(parsed.at);
+    if (!Number.isFinite(age) || age > REMEMBER_MS) return undefined;
+
+    return parsed.model;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Remember the model, so the next start does not have to wait. */
+async function remember(model: string, path?: string): Promise<void> {
+  try {
+    const where = rememberPath(path);
+    await mkdir(dirname(where), { recursive: true });
+    await writeFile(
+      where,
+      `${JSON.stringify({ at: new Date().toISOString(), model })}\n`,
+      "utf8",
+    );
+  } catch {
+    // A list that cannot be remembered is a list that is asked for again.
+  }
 }
