@@ -125,6 +125,8 @@ export class InteractiveUi {
     /** The line changed, so the list is drawn again. */
     onChange: () => void;
   };
+  /** A list is being gathered; the line waits for it. */
+  private preparing = false;
   private readonly pending: string[] = [];
   private createdAt = new Date().toISOString();
 
@@ -211,6 +213,16 @@ export class InteractiveUi {
 
   /** What the user typed, and what it means. */
   private async handleLine(line: string): Promise<void> {
+    // A list is being gathered: the Enter belongs to the list, not to the
+    // prompt.
+    if (this.preparing) return;
+
+    // A question mark is a question, not a prompt.
+    if (line.trim() === "?") {
+      this.showShortcuts();
+      return;
+    }
+
     const slash = parseSlash(line);
     if (slash !== undefined) {
       await this.handleSlash(slash.name, slash.args);
@@ -439,7 +451,11 @@ export class InteractiveUi {
   private pick(
     items: PickerItem[],
     title: string,
-    options: { onChange?: (picker: Picker) => void } = {},
+    options: {
+      onChange?: (picker: Picker) => void;
+      /** The line to put back when the list goes away. */
+      restore?: string;
+    } = {},
   ): Promise<string | undefined> {
     return new Promise((resolve) => {
       const picker = new Picker(items, {
@@ -462,12 +478,12 @@ export class InteractiveUi {
           }
           if (key.name === "return" || key.name === "enter") {
             const chosen = picker.selected?.value;
-            this.closePicker();
+            this.closePicker(options.restore);
             resolve(chosen);
             return true;
           }
           if (key.name === "escape") {
-            this.closePicker();
+            this.closePicker(options.restore);
             resolve(undefined);
             return true;
           }
@@ -484,17 +500,17 @@ export class InteractiveUi {
   }
 
   /** Take the picker off the screen and put the line back. */
-  private closePicker(): void {
+  private closePicker(restore?: string): void {
     this.picker = undefined;
-    this.restoreLine();
+    this.restoreLine(restore);
   }
 
   /** Redraw the input line, after something was drawn under it. */
-  private restoreLine(): void {
-    const line = this.rl.line;
+  private restoreLine(line?: string): void {
+    const text = line ?? this.rl.line;
     this.rl.write(null, { ctrl: true, name: "u" });
     this.rl.write(null, { ctrl: true, name: "k" });
-    this.rl.write(line);
+    this.rl.write(text);
   }
 
   /**
@@ -593,6 +609,26 @@ export class InteractiveUi {
 
     this.options.state.messages = session.messages;
     this.write(`${green("resumed")} ${dim(args)}\n`);
+  }
+
+  /** The keys, and what they do. */
+  private showShortcuts(): void {
+    const keys: Array<[string, string]> = [
+      ["Esc", "stop the turn"],
+      ["Shift+Tab", "the permission mode"],
+      ["Ctrl+T", "fold the last tool block"],
+      ["Tab", "the files, after an @"],
+      ["@file", "put a file in the prompt"],
+      ["!command", "run a shell command"],
+      ["/model", "the models you can use"],
+      ["/help", "the commands"],
+      ["?", "this list"],
+    ];
+
+    this.write(`${bold("the keys")}\n`);
+    for (const [key, what] of keys) {
+      this.write(`  ${cyan(key.padEnd(12))} ${dim(what)}\n`);
+    }
   }
 
   /** The commands the session knows. */
@@ -961,12 +997,27 @@ export class InteractiveUi {
    * move through them, Enter takes the one that is on.
    */
   private async complete(): Promise<void> {
-    const line = this.rl.line;
-    const cursor = this.rl.cursor ?? line.length;
+    // The tab that was just pressed is in the line already, and it would
+    // hide the word being completed.
+    const raw = this.rl.line;
+    const line = raw.replace(/\t+$/, "");
+    const cursor = Math.max(
+      0,
+      (this.rl.cursor ?? raw.length) - (raw.length - line.length),
+    );
+
     const word = wordAt(line, cursor);
     if (word === undefined) return;
 
-    const candidates = await this.fileCandidates(word.word.slice(1));
+    // The list takes a moment to gather; an Enter in the meantime belongs
+    // to the list, not to the prompt.
+    this.preparing = true;
+    let candidates: string[];
+    try {
+      candidates = await this.fileCandidates(word.word.slice(1));
+    } finally {
+      this.preparing = false;
+    }
     if (candidates.length === 0) return;
 
     const items: PickerItem[] = candidates.map((path) => ({
@@ -975,6 +1026,8 @@ export class InteractiveUi {
     }));
 
     const chosen = await this.pick(items, "pick a file", {
+      // The tab that was pressed is not part of what the user wrote.
+      restore: line,
       onChange: (picker) => {
         // The line changed, so the files that match it changed too.
         void this.refineFiles(picker, word);

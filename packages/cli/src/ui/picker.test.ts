@@ -1,4 +1,7 @@
 import { PassThrough } from "node:stream";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Event, ModelInfo, Provider, StreamRequest } from "@cli-agent/ai";
 import { stripAnsi } from "./colors.js";
@@ -184,5 +187,50 @@ describe("the model picker", () => {
 
     input.write("/exit\n");
     await running;
+  });
+
+  it("opens a list of the files when the user asks for one", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "cli-agent-picker-"));
+    await writeFile(join(directory, "alpha.ts"), "a", "utf8");
+    await writeFile(join(directory, "beta.ts"), "b", "utf8");
+
+    const input = new PassThrough();
+    const out = collector();
+
+    const ui = new InteractiveUi({
+      state: {
+        provider,
+        model: "test/model",
+        tools: [],
+        messages: [],
+      } as never,
+      out,
+      err: collector(),
+      input,
+      model: "test/model",
+      permissionMode: "ask",
+      cwd: directory,
+    });
+
+    const running = ui.run();
+    input.write("@al\t");
+    await wait(400);
+
+    const text = stripAnsi(out.text);
+
+    // The list is there, with the file that matches.
+    expect(text).toContain("pick a file");
+    expect(text).toContain("alpha.ts");
+    expect(text).not.toContain("beta.ts");
+
+    input.write("\x1b");
+    await wait(700);
+    // Clear the line the picker left behind, and leave.
+    input.write("\x15");
+    await wait(100);
+    input.write("/exit\n");
+    await running;
+
+    await rm(directory, { recursive: true, force: true });
   });
 });

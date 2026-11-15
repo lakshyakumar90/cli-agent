@@ -59,6 +59,7 @@ export function renderStatus(input: StatusInput): string {
   }
 
   parts.push(permissionLabel(input.permissionMode));
+  parts.push(gray("? for shortcuts"));
 
   return parts.join(dim(" · "));
 }
