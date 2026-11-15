@@ -18,7 +18,8 @@ import type { AvailableModel } from "../catalog.js";
 import { createBashTool } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
-import { completePath, wordAt } from "./complete.js";
+import { completeFile, completePath, wordAt } from "./complete.js";
+import { Picker, type PickerItem } from "./picker.js";
 import { MarkdownStream } from "./markdown.js";
 import {
   isKnownSlash,
@@ -104,6 +105,19 @@ export class InteractiveUi {
   private working = false;
   private pumping = false;
   private closed = false;
+  /** The list that is open, when one is. */
+  private picker?: {
+    picker: Picker;
+    /** The key was taken by the list. */
+    onKey: (key: {
+      name?: string;
+      ctrl?: boolean;
+      shift?: boolean;
+      sequence?: string;
+    }) => boolean;
+    /** The line changed, so the list is drawn again. */
+    onChange: () => void;
+  };
   private readonly pending: string[] = [];
   private createdAt = new Date().toISOString();
 
@@ -361,47 +375,113 @@ export class InteractiveUi {
   /** Show or change the model. */
   private async switchModel(args: string): Promise<void> {
     if (args.length === 0) {
+      // The picker: a list to move through, not a wall of text.
       const models = await this.availableModels();
-
-      // The models, grouped by the provider they belong to.
-      const groups = new Map<string, string[]>();
-      for (const model of models) {
-        const list = groups.get(model.provider) ?? [];
-        list.push(model.id);
-        groups.set(model.provider, list);
-      }
-
-      this.write(`${bold("models")}\n`);
-      for (const [provider, ids] of groups) {
-        this.write(`  ${cyan(provider)}\n`);
-        for (const id of ids) {
-          const ref = `${provider}/${id}`;
-          const mark = ref === this.model ? green("●") : " ";
-          this.write(`    ${mark} ${id}\n`);
-        }
-      }
-
-      if (groups.size === 0) {
+      if (models.length === 0) {
         this.write(dim("  there is nothing to pick yet\n"));
+        return;
       }
 
-      this.write(dim("\n/model <provider/model> to switch\n"));
+      const items: PickerItem[] = models.map((model) => ({
+        label: model.id,
+        value: model.ref,
+        group: model.provider,
+      }));
+
+      const chosen = await this.pick(items, "pick a model", {
+        onChange: (picker) => picker.narrow(this.rl.line),
+      });
+      if (chosen === undefined) return;
+
+      await this.useModel(chosen);
       return;
     }
 
+    await this.useModel(args);
+  }
+
+  /** Switch to a model, if it can be used. */
+  private async useModel(ref: string): Promise<void> {
     const onModel = this.options.onModel;
     if (onModel === undefined) return;
 
-    const provider = await onModel(args);
+    const provider = await onModel(ref);
     if (provider === undefined) {
-      this.write(`${red(`could not use ${args}`)}\n`);
+      this.write(`${red(`could not use ${ref}`)}\n`);
       return;
     }
 
-    this.model = args;
+    this.model = ref;
     this.options.state.provider = provider;
-    this.options.state.model = modelIdOf(args);
-    this.write(`${green("now using")} ${cyan(args)}\n`);
+    this.options.state.model = modelIdOf(ref);
+    this.write(`${green("now using")} ${cyan(ref)}\n`);
+  }
+
+  /**
+   * Put a list under the prompt and let the user move through it.
+   *
+   * The arrows move, Enter takes, Escape puts it away. Any other key goes
+   * to the line as usual, and the list is narrowed down to what was typed.
+   */
+  private pick(
+    items: PickerItem[],
+    title: string,
+    options: { onChange?: (picker: Picker) => void } = {},
+  ): Promise<string | undefined> {
+    return new Promise((resolve) => {
+      const picker = new Picker(items, {
+        out: this.options.out,
+        title,
+      });
+
+      this.picker = {
+        picker,
+        onKey: (key) => {
+          if (key.name === "up") {
+            picker.move(-1);
+            picker.render();
+            return true;
+          }
+          if (key.name === "down") {
+            picker.move(1);
+            picker.render();
+            return true;
+          }
+          if (key.name === "return" || key.name === "enter") {
+            const chosen = picker.selected?.value;
+            this.closePicker();
+            resolve(chosen);
+            return true;
+          }
+          if (key.name === "escape") {
+            this.closePicker();
+            resolve(undefined);
+            return true;
+          }
+          return false;
+        },
+        onChange: () => {
+          options.onChange?.(picker);
+          picker.render();
+        },
+      };
+
+      picker.render();
+    });
+  }
+
+  /** Take the picker off the screen and put the line back. */
+  private closePicker(): void {
+    this.picker = undefined;
+    this.restoreLine();
+  }
+
+  /** Redraw the input line, after something was drawn under it. */
+  private restoreLine(): void {
+    const line = this.rl.line;
+    this.rl.write(null, { ctrl: true, name: "u" });
+    this.rl.write(null, { ctrl: true, name: "k" });
+    this.rl.write(line);
   }
 
   /**
@@ -752,6 +832,15 @@ export class InteractiveUi {
     _text: string,
     key: { name?: string; ctrl?: boolean; shift?: boolean; sequence?: string },
   ): void => {
+    // A list that is open takes the keys that move it.
+    const picker = this.picker;
+    if (picker !== undefined) {
+      if (picker.onKey(key)) return;
+      // Any other key goes to the line, and the list is drawn again.
+      picker.onChange();
+      return;
+    }
+
     // Node reports a lone Esc as "escape" when the next key completes the
     // sequence, and with no name at all when it is flushed on its own.
     if (key.name === "escape" || key.sequence === "") {
@@ -784,24 +873,65 @@ export class InteractiveUi {
     }
   };
 
-  /** Complete an @-mention with a file. */
+  /**
+   * Complete an @-mention with a file.
+   *
+   * The files that match are put in a list under the prompt: the arrows
+   * move through them, Enter takes the one that is on.
+   */
   private async complete(): Promise<void> {
     const line = this.rl.line;
     const cursor = this.rl.cursor ?? line.length;
     const word = wordAt(line, cursor);
     if (word === undefined) return;
 
-    const candidates = await completePath(
-      word.word.slice(1),
-      this.options.cwd,
-    );
-    const chosen = candidates[0];
+    const candidates = await this.fileCandidates(word.word.slice(1));
+    if (candidates.length === 0) return;
+
+    const items: PickerItem[] = candidates.map((path) => ({
+      label: path,
+      value: path,
+    }));
+
+    const chosen = await this.pick(items, "pick a file", {
+      onChange: (picker) => {
+        // The line changed, so the files that match it changed too.
+        void this.refineFiles(picker, word);
+      },
+    });
     if (chosen === undefined) return;
 
-    const next = line.slice(0, word.start) + `@${chosen}`;
+    // The chosen path goes into the line, in place of what was typed.
+    const next =
+      line.slice(0, word.start) + `@${chosen}` + line.slice(cursor);
     this.rl.write(null, { ctrl: true, name: "u" });
     this.rl.write(null, { ctrl: true, name: "k" });
     this.rl.write(next);
+  }
+
+  /** The files that could complete what is being typed. */
+  private async fileCandidates(typed: string): Promise<string[]> {
+    const directories = await completePath(typed, this.options.cwd);
+    const files = await completeFile(typed, this.options.cwd);
+    return [...directories, ...files];
+  }
+
+  /** Narrow the file list down to what is being typed now. */
+  private async refineFiles(
+    picker: Picker,
+    word: { word: string; start: number },
+  ): Promise<void> {
+    const line = this.rl.line;
+    const cursor = this.rl.cursor ?? line.length;
+    const current = wordAt(line, cursor);
+
+    const typed =
+      current === undefined
+        ? word.word.slice(1)
+        : current.word.slice(1);
+
+    const candidates = await this.fileCandidates(typed);
+    picker.items = candidates.map((path) => ({ label: path, value: path }));
   }
 }
 

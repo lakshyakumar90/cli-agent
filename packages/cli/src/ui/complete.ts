@@ -84,5 +84,41 @@ export async function completePath(
 
   return entries
     .filter((entry) => entry.startsWith(prefix))
-    .map((entry) => (slash === -1 ? entry : `${typed.slice(0, slash + 1)}${entry}/`));
+    // A folder says so: the slash is what tells the user there is more
+    // inside it.
+    .map((entry) =>
+      slash === -1 ? `${entry}/` : `${typed.slice(0, slash + 1)}${entry}/`,
+    );
+}
+
+/**
+ * The files that could complete a path.
+ *
+ * The same walk as the directories, but the files: a path may name a file
+ * as well as a folder, and the picker should offer both.
+ */
+export async function completeFile(
+  typed: string,
+  cwd: string,
+): Promise<string[]> {
+  const slash = typed.lastIndexOf("/");
+  const directory = slash === -1 ? cwd : join(cwd, typed.slice(0, slash));
+  const prefix = slash === -1 ? typed : typed.slice(slash + 1);
+
+  let entries: string[];
+  try {
+    entries = await listFiles(directory);
+  } catch {
+    return [];
+  }
+
+  return entries
+    .filter((entry) => !entry.startsWith("."))
+    .filter((entry) => {
+      const name = entry.split("/").pop() ?? entry;
+      return name.startsWith(prefix);
+    })
+    .map((entry) =>
+      slash === -1 ? entry : `${typed.slice(0, slash + 1)}${entry}`,
+    );
 }
