@@ -9,6 +9,7 @@ import type { Usage } from "@cli-agent/ai";
 import { estimateCost } from "@cli-agent/ai";
 import type { ModelInfo } from "@cli-agent/ai";
 import { bold, cyan, dim, gray, green, red, yellow } from "./colors.js";
+import { contextShare, type ContextLeft } from "./frame.js";
 import { renderReplacement } from "./diff.js";
 
 export interface StatusInput {
@@ -22,6 +23,8 @@ export interface StatusInput {
   permissionMode: string;
   /** How many turns have run. */
   turns?: number;
+  /** How much of the context is left. */
+  left?: ContextLeft;
 }
 
 /** The status line. */
@@ -45,6 +48,15 @@ export function renderStatus(input: StatusInput): string {
   }
 
   if (input.turns !== undefined) parts.push(dim(`${input.turns} turns`));
+
+  // How much of the context is left, so the user knows when the
+  // conversation is about to be summarised.
+  const left = contextShare(input.left);
+  if (left !== undefined) {
+    const percent = Math.round(left * 100);
+    const paint = percent <= 15 ? red : percent <= 35 ? yellow : green;
+    parts.push(paint(`${percent}% context left`));
+  }
 
   parts.push(permissionLabel(input.permissionMode));
 

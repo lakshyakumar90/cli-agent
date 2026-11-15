@@ -11,14 +11,21 @@ import type { Msg, Provider, Usage } from "@cli-agent/ai";
 import { lookupModel, type ModelInfo } from "@cli-agent/ai";
 import type { AgentState } from "@cli-agent/core";
 import { run } from "@cli-agent/core";
+import { estimateRequest } from "@cli-agent/core";
 import type { CheckpointStore, SessionStore } from "@cli-agent/core";
 import type { AgentRole, Command } from "@cli-agent/core";
 import { renderCommand } from "@cli-agent/core";
 import type { AvailableModel } from "../catalog.js";
 import { createBashTool } from "@cli-agent/tools";
+import { toToolSpec } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
 import { completeFile, completePath, wordAt } from "./complete.js";
+import {
+  renderHeader,
+  spinnerFrame,
+  type ContextLeft,
+} from "./frame.js";
 import { Picker, type PickerItem } from "./picker.js";
 import { MarkdownStream } from "./markdown.js";
 import {
@@ -158,6 +165,12 @@ export class InteractiveUi {
         this.closed = true;
         void this.drain().then(() => resolve(0));
       });
+
+      // The header says where the agent is.
+      this.write(`${renderHeader({
+        model: this.model,
+        cwd: this.options.cwd,
+      })}\n\n`);
 
       this.rl.setPrompt(this.promptText());
       this.rl.prompt();
@@ -690,10 +703,15 @@ export class InteractiveUi {
 
     this.write("\n");
 
+    // The spinner says the agent is working. It steps aside as soon as
+    // there is something to show.
+    const spinner = this.startSpinner();
+
     try {
       for await (const event of run(this.options.state, prompt, controller.signal)) {
         switch (event.t) {
           case "text": {
+            spinner.stop();
             const text = markdown.write(event.delta);
             if (text.length > 0) this.write(text);
             break;
@@ -704,6 +722,7 @@ export class InteractiveUi {
             break;
 
           case "toolStart": {
+            spinner.stop();
             const block: ToolBlock = {
               id: event.call.id,
               name: event.call.name,
@@ -768,6 +787,7 @@ export class InteractiveUi {
         `${red(error instanceof Error ? error.message : String(error))}\n`,
       );
     } finally {
+      spinner.stop();
       const rest = markdown.flush();
       if (rest.length > 0) this.write(rest);
       this.working = false;
@@ -779,13 +799,19 @@ export class InteractiveUi {
     this.write(`${renderStatus(this.statusInput())}\n`);
   }
 
-  /** The status line, with what the model table says the model costs. */
+  /**
+   * The status line, with what the model table says the model costs.
+   *
+   * It also says how much of the context is left, so the user knows when
+   * the conversation is about to be summarised.
+   */
   private statusInput(): {
     model: string;
     usage?: Usage;
     info?: ModelInfo;
     permissionMode: string;
     turns: number;
+    left?: ContextLeft;
   } {
     const provider = this.model.split("/")[0] as string;
     const info = lookupModel(provider, modelIdOf(this.model));
@@ -797,7 +823,62 @@ export class InteractiveUi {
       ...(info === undefined ? {} : { info }),
       permissionMode: this.permissionMode,
       turns: this.turns,
+      ...(this.contextLeft() === undefined
+        ? {}
+        : { left: this.contextLeft() as ContextLeft }),
     };
+  }
+
+  /**
+   * The spinner.
+   *
+   * It says the agent is working, and it steps aside as soon as there is
+   * something to show: the answer, or a tool that is running.
+   */
+  private startSpinner(): { stop: () => void } {
+    let step = 0;
+    let timer: NodeJS.Timeout | undefined;
+    let drawn = false;
+
+    const draw = (): void => {
+      // The line is taken away and put again: the spinner turns where it
+      // is, not on a new line.
+      if (drawn) this.write(`\x1b[1A\r\x1b[2K`);
+      this.write(`${cyan(spinnerFrame(step))} ${dim("working")}`);
+      drawn = true;
+      step += 1;
+    };
+
+    draw();
+    timer = setInterval(draw, 90);
+
+    return {
+      stop: () => {
+        if (timer !== undefined) clearInterval(timer);
+        timer = undefined;
+        if (!drawn) return;
+        this.write("\x1b[1A\r\x1b[2K");
+        drawn = false;
+      },
+    };
+  }
+
+  /** How much of the context is left, when it can be worked out. */
+  private contextLeft(): ContextLeft | undefined {
+    const provider = this.model.split("/")[0] as string;
+    const model = modelIdOf(this.model);
+
+    const total = lookupModel(provider, model)?.contextWindow;
+    if (total === undefined) return undefined;
+
+    const used = estimateRequest({
+      model,
+      system: this.options.state.system ?? "",
+      messages: this.options.state.messages,
+      tools: this.options.state.tools.map(toToolSpec),
+    });
+
+    return { used, total };
   }
 
   /** The prompt, with the permission mode in it. */
