@@ -19,6 +19,7 @@ import {
 } from "./oauth.js";
 import { pkcePair, randomState } from "./pkce.js";
 import { resolveAuthSpec, type OAuthPreset, type ProviderAuthSpec } from "./specs.js";
+import { AUTH_SPECS } from "./specs.js";
 import { AuthStore, type AuthStoreOptions } from "./store.js";
 import type { Credential, OAuthCredential, ResolvedAuth } from "./types.js";
 
@@ -132,6 +133,35 @@ export class AuthManager {
     }
 
     return this.refresh(provider);
+  }
+
+  /**
+   * Whether there is a usable credential for `provider`.
+   *
+   * It never throws and never refreshes: it says whether there is
+   * something to use, which is what the model picker needs. The store is
+   * asked as well as the environment: a credential that has expired is
+   * still a credential until a request says otherwise.
+   */
+  async has(provider: string): Promise<boolean> {
+    const spec = this.spec(provider);
+    if (this.envCredential(provider, spec) !== undefined) return true;
+    return (await this.store.get(provider)) !== undefined;
+  }
+
+  /**
+   * The providers there is a credential for.
+   *
+   * The ones that need no credential at all - the CLIs on this machine -
+   * are not in it: they are always there.
+   */
+  async available(): Promise<string[]> {
+    const ids = Object.keys(AUTH_SPECS);
+    const found: string[] = [];
+    for (const id of ids) {
+      if (await this.has(id)) found.push(id);
+    }
+    return found;
   }
 
   /**

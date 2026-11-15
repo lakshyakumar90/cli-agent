@@ -19,6 +19,7 @@ import type {
   ModelInfo,
   ModelPricing,
   PricingTier,
+  Provider,
   Usage,
 } from "./types.js";
 
@@ -497,9 +498,34 @@ export function listModels(): ModelInfo[] {
   });
 }
 
+/**
+ * Is this model a free one?
+ *
+ * The routers mark them with a `:free` at the end of the id.
+ */
+export function isFreeModel(id: string): boolean {
+  return id.endsWith(":free");
+}
+
+/**
+ * The free models of a provider, as the provider itself lists them.
+ *
+ * A router knows which of its models cost nothing, and which cost a
+ * little: the list changes from day to day, so it is asked for rather
+ * than written down here.
+ */
+export async function freeModels(provider: Provider): Promise<ModelInfo[]> {
+  let listed: ModelInfo[];
+  try {
+    listed = await provider.models();
+  } catch {
+    return [];
+  }
+  return listed.filter((model) => isFreeModel(model.id));
+}
+
 /** The table entries a provider can serve, keyed by model id. */
-export function modelsForProvider(provider: string): ModelInfo[] {
-  const family = PROVIDER_FAMILY[provider];
+export function modelsForProvider(provider: string): ModelInfo[] {  const family = PROVIDER_FAMILY[provider];
   const models: ModelInfo[] = [];
 
   for (const [key, entry] of Object.entries(MODEL_TABLE)) {
