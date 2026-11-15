@@ -14,6 +14,7 @@ import { run } from "@cli-agent/core";
 import type { CheckpointStore, SessionStore } from "@cli-agent/core";
 import type { AgentRole, Command } from "@cli-agent/core";
 import { renderCommand } from "@cli-agent/core";
+import type { AvailableModel } from "../catalog.js";
 import { createBashTool } from "@cli-agent/tools";
 import type { PermissionMode } from "@cli-agent/tools";
 import { bold, cyan, dim, green, red, yellow } from "./colors.js";
@@ -78,6 +79,12 @@ export interface InteractiveOptions {
   commands?: Command[];
   /** Where the log of the session is written. */
   logPath?: string;
+  /**
+   * The models the user can pick.
+   *
+   * It is asked for when the picker is opened, so the list is of today.
+   */
+  onModels?: () => Promise<AvailableModel[]>;
 }
 
 /** The key that folds the last tool block. */
@@ -354,11 +361,30 @@ export class InteractiveUi {
   /** Show or change the model. */
   private async switchModel(args: string): Promise<void> {
     if (args.length === 0) {
-      this.write(`${bold("models")}\n`);
-      for (const ref of knownModels()) {
-        const mark = ref === this.model ? green("●") : " ";
-        this.write(`${mark} ${ref}\n`);
+      const models = await this.availableModels();
+
+      // The models, grouped by the provider they belong to.
+      const groups = new Map<string, string[]>();
+      for (const model of models) {
+        const list = groups.get(model.provider) ?? [];
+        list.push(model.id);
+        groups.set(model.provider, list);
       }
+
+      this.write(`${bold("models")}\n`);
+      for (const [provider, ids] of groups) {
+        this.write(`  ${cyan(provider)}\n`);
+        for (const id of ids) {
+          const ref = `${provider}/${id}`;
+          const mark = ref === this.model ? green("●") : " ";
+          this.write(`    ${mark} ${id}\n`);
+        }
+      }
+
+      if (groups.size === 0) {
+        this.write(dim("  there is nothing to pick yet\n"));
+      }
+
       this.write(dim("\n/model <provider/model> to switch\n"));
       return;
     }
@@ -376,6 +402,30 @@ export class InteractiveUi {
     this.options.state.provider = provider;
     this.options.state.model = modelIdOf(args);
     this.write(`${green("now using")} ${cyan(args)}\n`);
+  }
+
+  /**
+   * The models the user can pick.
+   *
+   * The list is asked for when the picker is opened, so it is the list of
+   * today: the free models of a router change from day to day.
+   */
+  private async availableModels(): Promise<AvailableModel[]> {
+    const onModels = this.options.onModels;
+    if (onModels === undefined) {
+      return knownModels().map((ref) => ({
+        ref,
+        provider: modelIdOf(ref) === ref ? ref : ref.split("/")[0] ?? ref,
+        id: modelIdOf(ref),
+        free: false,
+      }));
+    }
+
+    try {
+      return await onModels();
+    } catch {
+      return [];
+    }
   }
 
   /** Sign in to a provider. */
@@ -755,16 +805,23 @@ export class InteractiveUi {
   }
 }
 
-/** The models the agent knows about, for /model. */
+/**
+ * The models the agent knows about, for /model.
+ *
+ * This is the fallback: the real list is asked of the providers when the
+ * picker is opened, so the free models of a router are the ones that
+ * exist today.
+ */
 export function knownModels(): string[] {
   return [
+    "openrouter/nvidia/nemotron-3.5-lightning:free",
+    "openrouter/inclusionai/ling-3.2-flash:free",
+    "openrouter/cohere/north-mini-code:free",
+    "codex/gpt-6.1-sol",
+    "opencode-cli/opencode/big-pickle",
     "anthropic/claude-sonnet-5-5",
-    "anthropic/claude-opus-5-5",
-    "anthropic/claude-haiku-5-5",
-    "openai/gpt-5.5",
-    "openai/gpt-5.6-sol",
+    "openai/gpt-6.1-sol",
     "gemini/gemini-3.1-flash-lite",
-    "gemini/gemini-3.8-flash",
   ];
 }
 
