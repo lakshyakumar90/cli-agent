@@ -36,8 +36,14 @@ export interface CliOptions {
   noLog?: boolean;
 }
 
-/** The model used when nothing says otherwise. */
-export const DEFAULT_MODEL = "anthropic/claude-sonnet-5-5";
+/**
+ * The model used when nothing says otherwise.
+ *
+ * OpenRouter, and one of its free models: a key that is free to use is
+ * a key that works. The model itself is chosen at run time, from the
+ * free models that exist today.
+ */
+export const DEFAULT_MODEL = "openrouter/nvidia/nemotron-3.5-lightning:free";
 
 /** What the command line said, or what is wrong with it. */
 export type ParseResult =

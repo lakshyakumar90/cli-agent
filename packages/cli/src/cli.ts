@@ -2,14 +2,16 @@
 // @cli-agent/cli — the terminal interface: interactive, print and JSON modes.
 
 import { stdin as input, stdout as output } from "node:process";
-import { parseArgs, HELP } from "./args.js";
+import { parseArgs, HELP, DEFAULT_MODEL } from "./args.js";
 import { runJson, runPrint, runRpc } from "./commands.js";
 import { createSession } from "./session.js";
+import { buildCatalog, defaultFreeModel } from "./catalog.js";
 import { InteractiveUi } from "./ui/interactive.js";
 import { setColors, shouldUseColors } from "./ui/colors.js";
 import { loadAgents } from "./agents.js";
 import { createProvider } from "@cli-agent/ai";
 import { AuthManager } from "@cli-agent/ai";
+import { AuthError } from "@cli-agent/ai";
 import type { AskPermission } from "@cli-agent/tools";
 
 async function main(): Promise<number> {
@@ -27,6 +29,14 @@ async function main(): Promise<number> {
   const options = parsed.options;
   setColors(shouldUseColors());
 
+  // The default model is one of OpenRouter's free models, and the list of
+  // them changes: it is asked for, so the default is one that exists
+  // today. A user who chose a model keeps it.
+  const model =
+    options.model === DEFAULT_MODEL
+      ? await defaultFreeModel().catch(() => DEFAULT_MODEL)
+      : options.model;
+
   // Esc stops the turn that is running.
   const session = new AbortController();
 
@@ -43,7 +53,7 @@ async function main(): Promise<number> {
   let built;
   try {
     built = await createSession({
-      model: options.model,
+      model,
       cwd: options.cwd,
       permissionMode: options.permissionMode,
       rules: options.rules,
@@ -73,6 +83,16 @@ async function main(): Promise<number> {
   for (const problem of built.extensions.problems) {
     process.stderr.write(
       `the extension ${problem.path} did not load: ${problem.message}\n`,
+    );
+  }
+
+  // No credentials is not a reason to close the door: the session opens
+  // and says what is missing, so the user can sign in and carry on.
+  const missing = built.missing;
+  if (missing !== undefined) {
+    process.stderr.write(
+      `\n${missing.message}\n` +
+        `the session is open anyway — /login signs in, /model picks another provider.\n\n`,
     );
   }
 
@@ -123,6 +143,9 @@ async function main(): Promise<number> {
           roles,
           commands,
           ...(state.log?.path === undefined ? {} : { logPath: state.log.path }),
+          // The list is asked for when the picker is opened: the free
+          // models of a router change from day to day.
+          onModels: async () => (await buildCatalog()).models,
           onModel: async (ref) => {
             try {
               // A provider an extension added is a provider too.
@@ -183,6 +206,14 @@ main()
     process.exitCode = code;
   })
   .catch((error: unknown) => {
+    // A missing key is the user's problem to fix, not a crash: it gets the
+    // message, not a stack.
+    if (error instanceof AuthError) {
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+
     process.stderr.write(
       `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
     );
