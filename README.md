@@ -97,7 +97,7 @@ In the interactive session:
 
 | Key | What it does |
 | --- | --- |
-| `/model` | pick another model |
+| `/model` | pick another model — a list, with the arrows |
 | `/login` | sign in to a provider |
 | `/compact` | summarise the conversation now |
 | `/clear` | start the conversation over |
@@ -106,10 +106,18 @@ In the interactive session:
 | `/tree` | show the branches of the session |
 | `/undo` | take back the last change |
 | `/agents` | the agents it can delegate to |
-| `@file` | put a file into the prompt |
+| `/help` | the commands, and where the log is |
+| `?` | the keys |
+| `@` then `Tab` | the files, in a list — the arrows move, `Enter` takes |
 | `!command` | run a shell command |
 | `Esc` | stop the turn |
 | `Shift+Tab` | cycle the permission mode |
+| `Ctrl+T` | fold or unfold the last tool block |
+
+The session opens with a header — the model, the directory, how to change
+the model — and a status line that says how much of the context is left,
+what the session has cost, and how many turns it has taken. A spinner
+turns where it is while the agent works.
 
 ## Signing in
 
