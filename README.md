@@ -76,9 +76,22 @@ agent --rpc                    read JSON lines, write JSON lines
       --rpc                     read and write JSON lines
       --continue                carry on with the last session here
       --resume [id]             open a session (the newest one when none is named)
+      --log <file>              where the log of the session goes
+      --no-log                  write no log
   -v, --verbose                 show the tool activity
   -h, --help                    this text
 ```
+
+With no `--model`, the agent uses **one of OpenRouter's free models** — the
+one it picks from the free list that exists today. A key that is free to
+use is a key that works.
+
+`/model` shows only what you can pick: the providers you hold a credential
+for, and for OpenRouter only the free ones. The two CLIs on your machine
+are always in the list, because they need no credential.
+
+**The session opens even without a key.** It says what is missing and waits:
+`/login` signs in, `/model` picks another provider.
 
 In the interactive session:
 
@@ -112,6 +125,23 @@ temporary localhost address for the answer. The refresh token is stored and
 used when the access token runs out. The client ids come from the
 environment — `MYAGENT_CODEX_CLIENT_ID`, `MYAGENT_GOOGLE_CLIENT_ID` and
 `MYAGENT_GOOGLE_CLIENT_SECRET` — so no vendor id is baked into the code.
+
+**The CLIs on your machine are used as they are.** The Codex CLI's ChatGPT
+login is imported when the agent has no credential of its own — the CLI
+stays logged in, and the agent gets the same subscription:
+
+```sh
+agent --model codex/gpt-6.1-sol
+```
+
+The opencode CLI is driven as a provider, so the models it can serve are the
+ones it lists:
+
+```sh
+agent --model opencode-cli/opencode/big-pickle
+```
+
+Neither needs a key of its own: they are already signed in.
 
 ## Letting it work
 
