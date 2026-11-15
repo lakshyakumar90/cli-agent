@@ -8,13 +8,15 @@
 
 import { AuthManager } from "./auth/manager.js";
 import { AuthStore } from "./auth/store.js";
+import { importCodexCliAuth } from "./auth/cli-import.js";
+import { AuthError } from "./auth/errors.js";
 import { ProviderError } from "./errors.js";
 import { anthropic } from "./providers/anthropic.js";
 import { codex } from "./providers/codex.js";
 import { gemini } from "./providers/gemini.js";
 import { localOpencode } from "./providers/local-opencode.js";
 import { openaiCompat } from "./providers/openai-compat.js";
-import type { Provider } from "./types.js";
+import type { Event, Provider } from "./types.js";
 
 export interface ProviderFactoryOptions {
   /** The environment to read credentials from. Defaults to `process.env`. */
@@ -104,8 +106,7 @@ export async function createProvider(
     }
 
     case "codex": {
-      const { token } = await auth.get("codex");
-      const accountId = await accountIdOf(store);
+      const { token, accountId } = await codexCredential(auth);
       return codex({
         id: "codex",
         accessToken: token,
@@ -128,6 +129,54 @@ export async function createProvider(
         { provider: id, code: "protocol" },
       );
   }
+}
+
+/**
+ * The ChatGPT credential.
+ *
+ * The Codex CLI on this machine may already be logged in. When the agent
+ * has no credential of its own, the CLI's login is imported: the CLI
+ * stays logged in, and the agent can use the same subscription.
+ */
+async function codexCredential(auth: AuthManager): Promise<{
+  token: string;
+  accountId?: string;
+}> {
+  try {
+    const resolved = await auth.get("codex");
+    const accountId = await accountIdOf(auth.store);
+    return { token: resolved.token, ...(accountId === undefined ? {} : { accountId }) };
+  } catch (error) {
+    // Only a missing credential is worth trying the CLI for; anything else
+    // is a real failure and is left alone.
+    if (!(error instanceof AuthError) || error.code !== "config") throw error;
+
+    const imported = await importCodexCliAuth({ store: auth.store });
+    return {
+      token: imported.access,
+      ...(imported.accountId === undefined ? {} : { accountId: imported.accountId }),
+    };
+  }
+}
+
+/**
+ * A provider that says there are no credentials, when it is called.
+ *
+ * The agent opens without credentials - the user may be signing in, or
+ * looking at what the agent can do - and the first request says what is
+ * missing.
+ */
+export function missingProvider(
+  id: string,
+  message: string,
+): Provider {
+  return {
+    id,
+    models: async () => [],
+    async *stream(): AsyncGenerator<Event> {
+      throw new AuthError(message, { code: "config", provider: id });
+    },
+  };
 }
 
 /** The ChatGPT account id, when the credential carries one. */
