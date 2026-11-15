@@ -84,6 +84,7 @@ export const AUTH_SPECS: Record<string, ProviderAuthSpec> = {
   anthropic: { env: ["ANTHROPIC_API_KEY"] },
   gemini: { env: ["GEMINI_API_KEY"] },
   opencode: { env: ["OPENCODE_API_KEY"] },
+  openrouter: { env: ["OPENROUTER_API_KEY"] },
   codex: {
     oauthEnv: ["CODEX_ACCESS_TOKEN"],
     oauth: CODEX_OAUTH,
