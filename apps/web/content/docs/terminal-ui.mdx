@@ -1,0 +1,39 @@
+The interactive terminal uses pi-tui's differential renderer. One owner reads input; the UI updates the screen rather than appending a new permission line or thinking label for every state change.
+
+## Rendering pipeline
+
+<Diagram
+  name="terminal-ui"
+  title="Separate runtime events from terminal display state"
+/>
+
+`interactive.ts` composes the editor, transcript, activity, footer, and focused overlays. `UiStore` keeps display blocks; `components.ts` renders them. `terminal.ts` adapts native or injected streams for pi's main-screen renderer.
+
+## Transcript and thinking
+
+Text deltas extend an existing text block. Supplied thinking extends a thinking block with a six-line preview under a `thinking` label. Tool calls are keyed by call ID, so repeated status events update a single row. Complete arguments and output remain available through Alt+I or `/inspect`.
+
+The question the user asked and the answer of the model never look alike: the question is at the margin, marked and in bold, and the answer is indented and says which model gave it.
+
+Transcript notices, picker search strings, progress, and folds do not become model messages. Meaningful repeated model text is retained; the display does not remove phrases simply because they look alike.
+
+## Focus and overlays
+
+Model and session selectors have their own search inputs. Opening a picker preserves the prompt draft. The models of a provider sit under its name, and the name stays visible while the list is scrolled. Approval dialogs can temporarily suspend another overlay, identify the requesting worker, and return to the prior search afterward. An approval is a box: the request, the arguments, the answers, and the cursor are all in it. Esc backs out of a dialog or requests interruption when no dialog owns the input.
+
+Ctrl+T is not bound to inspection. Alt+I is the shortcut, with `/inspect` available when an IDE captures key combinations.
+
+## Model changes and persistence
+
+Selecting a model during active work stages it for the next queued prompt. The footer makes that state visible. Applying the change adds a previous-to-new-model marker. `SessionController` saves these markers and other UI metadata in a sidecar, separately from the provider conversation.
+
+## Test the actual screen
+
+`screen.test.ts` feeds terminal bytes into headless xterm and asserts rendered screen cells, including resize, selector cleanup, approvals, thinking, and model markers. This catches defects that checking raw ANSI strings would miss.
+
+```bash
+pnpm --filter @cli-agent/cli test
+pnpm --filter @cli-agent/cli exec tsx scripts/terminal-smoke.ts
+```
+
+The smoke script uses a fake provider in a real terminal. It requires no account and writes no session files. Use it to check keyboard negotiation, selection, inspection, and clean exit on your platform.

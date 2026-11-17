@@ -9,7 +9,12 @@
 import { isAbsolute, relative, sep } from "node:path";
 import type { Tool, ToolContext } from "../types.js";
 import { resolvePath } from "../paths.js";
-import { decidePermission, denialReason, type PermissionConfig } from "./decide.js";
+import type { PermissionController } from "./controller.js";
+import {
+  decidePermission,
+  denialReason,
+  type PermissionConfig,
+} from "./decide.js";
 import type {
   AskPermission,
   PermissionDecision,
@@ -18,6 +23,7 @@ import type {
 } from "./types.js";
 
 export interface PermissionOptions extends PermissionConfig {
+  controller?: PermissionController;
   /** Asked when a call needs permission. Without it, nothing is allowed. */
   ask?: AskPermission;
 }
@@ -46,8 +52,19 @@ export function wrapTool(
   const wrapped: Tool = {
     ...tool,
     async run(args: any, ctx: ToolContext) {
-      const workspace = options.workspace ?? ctx.cwd;
+      const workspace = ctx.workspace ?? options.workspace ?? ctx.cwd;
       const request = describeRequest(tool, args, ctx, workspace);
+
+      if (options.controller !== undefined) {
+        if (!(await options.controller.authorize(request, ctx.signal))) {
+          return {
+            output: `permission denied: ${options.controller.explain(request)}`,
+            isError: true,
+          };
+        }
+        ctx.signal.throwIfAborted();
+        return tool.run(args, ctx);
+      }
 
       const action = decidePermission(request, { ...options, rules });
       if (action === "deny") {
@@ -66,17 +83,22 @@ export function wrapTool(
           };
         }
 
-        const decision: PermissionDecision = await ask(request);
+        const decision: PermissionDecision = await ask(request, ctx.signal);
         if (decision === "deny") {
           return {
             output: `permission denied: ${request.reason}`,
             isError: true,
           };
         }
-        if (decision === "allow-always") {
+        if (
+          decision === "allow-always" &&
+          !/[?*]/.test(request.subject ?? "")
+        ) {
           rules.push({
             tool: request.tool,
-            ...(request.subject === undefined ? {} : { pattern: request.subject }),
+            ...(request.subject === undefined
+              ? {}
+              : { pattern: request.subject }),
             action: "allow",
           });
         }
@@ -106,9 +128,9 @@ export function describeRequest(
         ? record.cwd
         : undefined;
 
-  const resolved = rawPath === undefined ? undefined : resolvePath(workspace, rawPath);
-  const outside =
-    resolved !== undefined && !isInside(workspace, resolved);
+  const resolved =
+    rawPath === undefined ? undefined : resolvePath(workspace, rawPath);
+  const outside = resolved !== undefined && !isInside(workspace, resolved);
 
   const subject =
     effect === "execute"
@@ -122,6 +144,8 @@ export function describeRequest(
         : relativeTo(workspace, resolved);
 
   return {
+    ...(ctx.agentId === undefined ? {} : { agentId: ctx.agentId }),
+    cwd: ctx.cwd,
     tool: tool.name,
     effect,
     args,

@@ -1,0 +1,11 @@
+flowchart TD
+  CONTROL[SessionController] --> STORE[SessionStore]
+  STORE --> JOURNAL[Append-only JSONL entries]
+  JOURNAL --> PARENT[IDs and parent pointers]
+  PARENT --> FORK[Inherited fork history]
+  CONTROL --> META[Atomic session metadata]
+  CONTROL --> UI[Versioned UI sidecar]
+  UI --> WORKERS[Worker and review records]
+  UI --> MODELS[Model markers and reasoning preference]
+  CONTROL --> STATE[Active model and messages]
+  STATE --> VIEW[Restore terminal display]

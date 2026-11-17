@@ -1,0 +1,13 @@
+flowchart TD
+  KEY[Keyboard input] --> OWNER[InteractiveUi input owner]
+  OWNER --> FOCUS{Focused dialog?}
+  FOCUS -->|Yes| MODAL[Selector, approval, or detail view]
+  FOCUS -->|No| EDITOR[Prompt editor and commands]
+  EDITOR --> LOOP[Agent loop]
+  LOOP --> EVENTS[Normalized runtime events]
+  EVENTS --> STORE[UiStore display blocks]
+  STORE --> COMPONENTS[Transcript, activity, and footer]
+  MODAL --> RENDER[pi differential renderer]
+  COMPONENTS --> RENDER
+  RENDER --> SCREEN[Terminal screen cells]
+  LOOP --> JOURNAL[Independent conversation journal]

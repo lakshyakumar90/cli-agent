@@ -26,6 +26,10 @@ import {
 
 /** One model the user can pick. */
 export interface AvailableModel {
+  name?: string;
+  contextWindow?: number;
+  pricing?: ModelInfo["pricing"];
+  supportedEfforts?: string[];
   /** The "provider/model" ref. */
   ref: string;
   /** The provider it belongs to. */
@@ -38,6 +42,19 @@ export interface AvailableModel {
 
 /** What the user can pick, and what is missing. */
 export interface Catalog {
+  problems?: Array<{
+    provider: string;
+    message: string;
+    /**
+     * Why the provider could not be used.
+     *
+     * `"missing"` says the program itself is not there; `"unreachable"`
+     * says it is there but did not answer. The two need different advice,
+     * and telling a user to install a CLI that is already installed is
+     * worse than saying nothing.
+     */
+    kind?: "missing" | "unreachable";
+  }>;
   /** The models, grouped by provider. */
   models: AvailableModel[];
   /** The providers there is no credential for. */
@@ -64,9 +81,11 @@ export const PREFERRED_FREE = [
 export const LOCAL_PROVIDERS = ["opencode-cli"];
 
 /** The free model to use when nothing else is said. */
-export const FALLBACK_FREE_MODEL = "openrouter/nvidia/nemotron-3.5-lightning:free";
+export const FALLBACK_FREE_MODEL =
+  "openrouter/nvidia/nemotron-3.5-lightning:free";
 
 export interface CatalogOptions {
+  signal?: AbortSignal;
   /** The environment to read credentials from. */
   env?: NodeJS.ProcessEnv;
   /** The credentials store. */
@@ -75,6 +94,13 @@ export interface CatalogOptions {
   factory?: ProviderFactoryOptions;
   /** Providers that are already built, by id. */
   providers?: Map<string, Provider>;
+  /**
+   * The provider of an id, when the session has one already.
+   *
+   * A provider that owns a process — the OpenCode CLI drives one — must not
+   * be built twice, or the session ends up with two of them.
+   */
+  providerFor?: (id: string) => Promise<Provider | undefined>;
   /** Where the free model is remembered. */
   rememberPath?: string;
 }
@@ -83,7 +109,9 @@ export interface CatalogOptions {
  * What the user can pick.
  *
  * It never throws: a provider that cannot be reached or cannot be built
- * is simply not in the list.
+ * is simply not in the list. The providers are asked at the same time —
+ * one of them alone can take seconds — and the models keep the order they
+ * were asked in.
  */
 export async function buildCatalog(
   options: CatalogOptions = {},
@@ -96,27 +124,104 @@ export async function buildCatalog(
   const models: AvailableModel[] = [];
   const missing: string[] = [];
   const local: string[] = [];
+  const problems: Catalog["problems"] = [];
+  const collect = async (provider: string): Promise<AvailableModel[]> => {
+    if (options.signal?.aborted) return [];
+    try {
+      return await modelsOf(provider, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      problems.push({
+        provider,
+        message,
+        // A command that cannot be run at all is missing; anything else
+        // reached the program and did not answer.
+        kind: isMissingCommand(message) ? "missing" : "unreachable",
+      });
+      return [];
+    }
+  };
 
-  // The providers that need a credential.
-  for (const provider of ["openrouter", "anthropic", "openai", "gemini", "codex"]) {
-    if (!(await auth.has(provider))) {
-      missing.push(provider);
+  // The providers that need a credential, and the CLIs on this machine: they
+  // are all asked at once, because one slow provider must not hold the rest
+  // of the list back.
+  const credentialed = [
+    "openrouter",
+    "anthropic",
+    "openai",
+    "gemini",
+    "codex",
+  ];
+  const asked = await Promise.all([
+    ...credentialed.map(async (provider) => {
+      if (!(await auth.has(provider))) {
+        return { provider, missing: true, listed: [] as AvailableModel[] };
+      }
+      return {
+        provider,
+        missing: false,
+        listed: await collect(provider),
+      };
+    }),
+    ...LOCAL_PROVIDERS.map(async (provider) => ({
+      provider,
+      missing: false,
+      listed: await collect(provider),
+    })),
+  ]);
+
+  for (const result of asked) {
+    if (result.missing) {
+      missing.push(result.provider);
       continue;
     }
-
-    const listed = await modelsOf(provider, options);
-    models.push(...listed);
+    if (LOCAL_PROVIDERS.includes(result.provider) && result.listed.length === 0)
+      continue;
+    if (LOCAL_PROVIDERS.includes(result.provider)) local.push(result.provider);
+    models.push(...result.listed);
   }
 
-  // The CLIs on this machine: they are already logged in.
-  for (const provider of LOCAL_PROVIDERS) {
-    const listed = await modelsOf(provider, options);
-    if (listed.length === 0) continue;
-    local.push(provider);
-    models.push(...listed);
+  for (const [id, provider] of options.factory?.providers ?? []) {
+    if (options.signal?.aborted) break;
+    try {
+      for (const model of await provider.models(options.signal)) {
+        if (id === "openrouter" && !isFreeModel(model.id)) continue;
+        models.push({
+          ...model,
+          provider: id,
+          ref: `${id}/${model.id}`,
+          free: id === "openrouter" && isFreeModel(model.id),
+        });
+      }
+    } catch (error) {
+      problems.push({
+        provider: id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
+  return {
+    models: [...new Map(models.map((model) => [model.ref, model])).values()],
+    missing,
+    local,
+    problems,
+  };
+}
 
-  return { models, missing, local };
+/**
+ * Is the program itself not there?
+ *
+ * The command could not be run at all: it is not on the path, or it is not
+ * the program it claims to be. Anything else reached it and did not answer,
+ * which is a different problem and needs different advice.
+ */
+export function isMissingCommand(message: string): boolean {
+  return (
+    message.includes("cannot run") ||
+    message.includes("is not recognized") ||
+    message.includes("ENOENT") ||
+    message.includes("not found")
+  );
 }
 
 /** The models one provider can serve. */
@@ -132,10 +237,16 @@ async function modelsOf(
 
     const listed =
       provider === "openrouter"
-        ? await freeModels(built)
-        : await listModels(built);
+        ? (await built.models(options.signal)).filter((model) =>
+            isFreeModel(model.id),
+          )
+        : await built.models(options.signal);
 
     return listed.map((model) => ({
+      name: model.name,
+      supportedEfforts: model.supportedEfforts,
+      contextWindow: model.contextWindow,
+      pricing: model.pricing,
       ref: `${provider}/${model.id}`,
       provider,
       id: model.id,
@@ -144,6 +255,10 @@ async function modelsOf(
   }
 
   return modelsForProvider(provider).map((model) => ({
+    name: model.name,
+    supportedEfforts: model.supportedEfforts,
+    contextWindow: model.contextWindow,
+    pricing: model.pricing,
     ref: `${provider}/${model.id}`,
     provider,
     id: model.id,
@@ -158,6 +273,17 @@ async function build(
 ): Promise<Provider | undefined> {
   const already = options.providers?.get(provider);
   if (already !== undefined) return already;
+
+  // The session may already have one: it is asked first, so a provider
+  // that owns a process is not built a second time.
+  if (options.providerFor !== undefined) {
+    try {
+      const made = await options.providerFor(provider);
+      if (made !== undefined) return made;
+    } catch {
+      // A provider that cannot be built is simply not in the list.
+    }
+  }
 
   try {
     return await createProvider(provider, options.factory ?? {});
@@ -214,6 +340,18 @@ export async function defaultFreeModel(
 
   await remember(chosen, options.rememberPath);
   return chosen;
+}
+
+/**
+ * The free model that was remembered, without asking anybody.
+ *
+ * The session opens with this one, so that the wait for the list of the
+ * router does not stand between the user and the first question.
+ */
+export async function rememberedFreeModel(
+  options: CatalogOptions = {},
+): Promise<string | undefined> {
+  return readRemembered(options.rememberPath);
 }
 
 /** How long the list of free models is remembered. */

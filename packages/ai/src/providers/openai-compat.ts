@@ -155,7 +155,10 @@ function toWireMessages(system: string, messages: Msg[]): WireMessage[] {
       assistant.tool_calls = calls.map((call) => ({
         id: call.id,
         type: "function",
-        function: { name: call.name, arguments: JSON.stringify(call.args ?? {}) },
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.args ?? {}),
+        },
       }));
     }
 
@@ -330,12 +333,14 @@ export function openaiCompat(options: OpenAICompatOptions): Provider {
     ...headers,
   });
 
-  const listModels = async (): Promise<ModelInfo[]> => {
+  const listModels = async (signal?: AbortSignal): Promise<ModelInfo[]> => {
     let response: Response;
     try {
       response = await doFetch(endpoint(modelsPath), {
         headers: headersFor("application/json"),
-        signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(MODELS_TIMEOUT_MS)])
+          : AbortSignal.timeout(MODELS_TIMEOUT_MS),
       });
     } catch (error) {
       throw networkError(id, error);
@@ -384,6 +389,11 @@ export function openaiCompat(options: OpenAICompatOptions): Provider {
       ...(includeUsage ? { stream_options: { include_usage: true } } : {}),
       ...(tools.length > 0 ? { tools: toWireTools(tools) } : {}),
       ...extraBody,
+      ...(request.reasoningEffort === undefined
+        ? {}
+        : id === "openrouter"
+          ? { reasoning: { effort: request.reasoningEffort } }
+          : { reasoning_effort: request.reasoningEffort }),
     };
 
     let response: Response;
@@ -475,7 +485,8 @@ export function openaiCompat(options: OpenAICompatOptions): Provider {
 
   return {
     id,
-    models: () => (modelsPromise ??= listModels()),
+    models: (signal) =>
+      signal ? listModels(signal) : (modelsPromise ??= listModels()),
     stream,
   };
 }

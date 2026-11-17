@@ -140,8 +140,17 @@ describe("the session store", () => {
 
     // The fork is its own file, hanging off the message it was forked from.
     const entries = await store.read(forked as string);
-    expect(entries[0]?.parent).toBe(first);
-    expect(entries[0]?.msg).toEqual({ role: "user", content: "from the fork" });
+    expect(entries[1]?.parent).toBe(first);
+    expect(entries[1]?.msg).toEqual({ role: "user", content: "from the fork" });
+    expect(await store.transcript(forked!)).toEqual([
+      { role: "user", content: "the first" },
+      { role: "user", content: "from the fork" },
+    ]);
+    await store.open({ id: forked! });
+    expect((await store.transcript(forked!))[0]).toEqual({
+      role: "user",
+      content: "the first",
+    });
   });
 
   it("shows the tree of a conversation", async () => {

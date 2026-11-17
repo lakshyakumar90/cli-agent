@@ -1,0 +1,16 @@
+flowchart TD
+  HOST[Host StreamRequest] --> REPLAY[Serialize conversation and tool specs]
+  REPLAY --> GUARD[Load local native-execution guard]
+  GUARD --> READY{Fresh guarded agent registered?}
+  READY -->|No| FAIL[Stop with CLI configuration error]
+  READY -->|Yes| CHILD[Local OpenCode CLI with built-in profile]
+  CHILD --> MODEL[Connected model provider]
+  MODEL --> JSONL[OpenCode JSONL events]
+  JSONL --> FRAME[Assemble lines and normalize snapshots]
+  FRAME --> ERR{Provider error?}
+  ERR -->|Yes| VISIBLE[Report actionable failure]
+  ERR -->|No| PROTOCOL[Parse text, thinking, or host tool request]
+  PROTOCOL --> LOOP[Host agent loop]
+  LOOP --> PERMISSION[Validate and check permissions]
+  PERMISSION --> TOOL[Execute host tool]
+  TOOL --> HOST

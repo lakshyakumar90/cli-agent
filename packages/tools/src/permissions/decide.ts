@@ -37,6 +37,16 @@ export function decidePermission(
     return "deny";
   }
 
+  // Explicit denials remain effective even outside the workspace and in Full access.
+  if (
+    (config.rules ?? []).some(
+      (rule) =>
+        rule.action === "deny" &&
+        matchRule([rule], request.tool, request.subject) !== undefined,
+    )
+  )
+    return "deny";
+
   // 2. Outside the workspace is a question, whatever the mode says.
   if (request.outsideWorkspace === true) {
     if (config.mode === "yolo") return "allow";
@@ -46,11 +56,7 @@ export function decidePermission(
   }
 
   // 3. The rules.
-  const rule = matchRule(
-    config.rules ?? [],
-    request.tool,
-    request.subject,
-  );
+  const rule = matchRule(config.rules ?? [], request.tool, request.subject);
   if (rule !== undefined) return rule.action;
 
   // 4. The tool asked for permission itself.
@@ -62,7 +68,7 @@ export function decidePermission(
       return "allow";
     case "auto-edit":
       // Edits go through; commands still ask.
-      return request.effect === "write" ? "allow" : "ask";
+      return request.effect === "execute" ? "ask" : "allow";
     case "plan":
       return "allow";
     case "ask":

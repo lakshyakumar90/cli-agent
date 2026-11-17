@@ -1,0 +1,51 @@
+Start with the visible error, selected provider, and installed version. Distinguish an upstream account failure from a local tool or UI problem.
+
+## The agent command is not found
+
+Confirm the tarball was installed globally and npm's global bin directory is on PATH. Restart the terminal after PATH changes. You can bypass the global shim with `pnpm --filter @cli-agent/cli start --help` from the checkout.
+
+## A provider is missing or rejects a request
+
+Check its environment variable in the terminal that starts Agent, or use `/login`. `/model` refreshes the catalog and shows connection failures. Model access depends on the account; a remembered model ID is not proof it is still available.
+
+For Codex import, confirm the installed Codex CLI is signed in. OAuth flows need configured client IDs. For OpenCode, verify the local executable and provider connections with `opencode --version` and `opencode models`.
+
+## The OpenCode CLI is unavailable
+
+`/model` asks every provider at once and says which ones could not be reached, with the message of the failure and what to do about it. For the OpenCode CLI on this machine, that means checking `opencode --version`, and setting `MYAGENT_OPENCODE_COMMAND` when the executable is somewhere else.
+
+A cold OpenCode can answer its first request for the catalogue with “Location plugins did not finish activating”. The catalogue is read again in that case; the name of the failure is kept, and not only the stack under it, so the retry can happen.
+
+## OpenCode appears silent
+
+The bridge must read complete JSONL events and surface error events even if OpenCode exits successfully. Current builds report empty responses, timeouts, malformed host-tool requests, and native-tool attempts rather than treating them as an answer.
+
+If OpenCode reports “Free usage limit reached,” switch to a model/provider with access or wait for the account quota reset. Reinstalling Agent does not increase upstream quota. The bridge uses a private server so its transport configuration applies independently of an existing OpenCode background service. That private server is started once for the whole session and shared by every turn; a server per turn costs several seconds before the model is even asked.
+
+## Thinking does not appear
+
+Only supplied reasoning text is shown. Some models expose no thinking, and some return signed or redacted content that cannot be displayed as ordinary prose. A blank thinking view is not a reason to fabricate it. For available text, Alt+I or `/inspect` opens the full latest block.
+
+## An IDE captures the shortcut
+
+Use `/inspect` instead of Alt+I. Ctrl+T is intentionally unbound for inspection. `/help` lists the installed shortcuts. If text input is behaving unusually, close the current picker or approval dialog first.
+
+## A tool is denied or waits for approval
+
+Check `/permissions`, explicit rules, the working directory, and whether the request came from a worker. Plan mode refuses non-read effects. Outside-workspace requests may ask even when normal workspace edits are allowed. Mode changes do not undo a command that has already executed.
+
+## A worker or review was interrupted
+
+Open `/tasks` and inspect status, transcript, and worktree before resuming. Reviews with malformed output or incomplete diffs are not clean results. Re-run a review if the working-tree fingerprint changed after capture.
+
+## Report a useful issue
+
+Include the platform, Node version, provider ID, command or UI steps, visible error, and a minimal reproduction. Inspect logs under `~/.myagent/logs` or the path supplied by `--log`. Logging redacts known secrets, but review all attachments yourself. Never share auth files, access tokens, private source, or raw request payloads unnecessarily.
+
+## OpenCode works normally but Agent reports a free limit
+
+Use the `opencode-cli/` model prefix for the local CLI. The direct `opencode/` adapter is a separate API transport. Compare `opencode --version` and the executable selected in the shell that launches Agent; this machine had npm 2.2.5 and an older pnpm 2.0.18 shim.
+
+The bridge previously replaced OpenCode's system profile and cleared its native tool definitions. That changed the request enough to produce a free-limit response while the ordinary CLI still worked. The guarded bridge now retains the built-in profile, blocks native execution locally, and forwards host-tool requests. Rebuild/reinstall Agent and restart the running process to load this change. Do not change provider keys or retry indefinitely as a substitute for fixing an adapter mismatch.
+
+If the fresh guarded agent is unavailable, verify a compatible local OpenCode installation and plugin loading. `MYAGENT_OPENCODE_COMMAND` selects an explicit CLI path. A genuine quota error may still occur upstream; compare the same model, login, working directory, and prompt before diagnosing it.

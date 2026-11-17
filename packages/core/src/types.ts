@@ -50,6 +50,7 @@ export interface ToolResultMsg {
  * replayed later.
  */
 export interface AgentState {
+  reasoningEffort?: string;
   /** The backend that answers. */
   provider: Provider;
   /** The model id, as the provider knows it. */
@@ -165,7 +166,8 @@ export const DEFAULT_LIMITS: Required<
     | "retryDelayMs"
     | "maxRetryDelayMs"
   >
-> & AgentLimits = {
+> &
+  AgentLimits = {
   maxTurns: 25,
   maxRepeatedCalls: 3,
   maxRetries: 3,
@@ -210,7 +212,13 @@ export type AgentEvent =
    */
   | { t: "compacted"; tokens: number; budget: number }
   /** The agent is done. */
-  | { t: "done"; stop: StopReason; turns: number; usage: Usage; reason: LoopEnd };
+  | {
+      t: "done";
+      stop: StopReason;
+      turns: number;
+      usage: Usage;
+      reason: LoopEnd;
+    };
 
 /** A state with the usual defaults. */
 export function createState(

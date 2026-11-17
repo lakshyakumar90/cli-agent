@@ -70,7 +70,10 @@ const SYMBOL_PATTERNS: RegExp[] = [
 /**
  * The outline of a project.
  *
- * Only the files that hold code, and only what is in them.
+ * Only the files that hold code, and only what is in them. The files are
+ * read together, not one after another: the map is built before the first
+ * question is asked, and reading three hundred files one by one is a wait
+ * the user can feel.
  */
 export async function buildRepoMap(
   cwd: string,
@@ -83,18 +86,25 @@ export async function buildRepoMap(
   } = options;
 
   const files = await walkFiles(cwd, { extensions, limit: maxFiles * 2 });
+
+  // The files are read in batches, so that the map is built in a fraction
+  // of the time it would take to read them one by one.
   const entries: RepoMapEntry[] = [];
-
-  for (const file of files) {
+  const batchSize = 24;
+  for (let start = 0; start < files.length; start += batchSize) {
+    const batch = files.slice(start, start + batchSize);
+    const found = await Promise.all(batch.map((file) => symbolsIn(file)));
+    for (const [index, symbols] of found.entries()) {
+      if (entries.length >= maxFiles) break;
+      if (symbols.length === 0) continue;
+      const file = batch[index];
+      if (file === undefined) continue;
+      entries.push({
+        path: relative(cwd, file).split(sep).join("/"),
+        symbols: symbols.slice(0, maxSymbols),
+      });
+    }
     if (entries.length >= maxFiles) break;
-
-    const symbols = await symbolsIn(file);
-    if (symbols.length === 0) continue;
-
-    entries.push({
-      path: relative(cwd, file).split(sep).join("/"),
-      symbols: symbols.slice(0, maxSymbols),
-    });
   }
 
   return entries;

@@ -71,6 +71,7 @@ export interface PricingTier {
 
 /** Model metadata, used by the registry, the model picker and Phase 5 budgets. */
 export interface ModelInfo {
+  supportedEfforts?: string[];
   /** Wire id sent to the provider, e.g. "claude-sonnet-4-5". */
   id: string;
   /** Provider id serving this model, e.g. "anthropic". */
@@ -172,6 +173,7 @@ export type Event =
 
 /** Arguments shared by every `Provider.stream` implementation. */
 export interface StreamRequest {
+  reasoningEffort?: string;
   model: string;
   system: string;
   messages: Msg[];
@@ -186,6 +188,22 @@ export interface StreamRequest {
 export interface Provider {
   /** Stable id used in "provider/model" refs, e.g. "anthropic". */
   id: string;
-  models(): Promise<ModelInfo[]>;
+  models(signal?: AbortSignal): Promise<ModelInfo[]>;
   stream(req: StreamRequest): AsyncIterable<Event>;
+  /**
+   * Get ready before the first turn.
+   *
+   * A provider that owns a process — the OpenCode CLI drives one — can
+   * start it here, in the background, so that the first question is not
+   * answered after the startup of that process. Nothing is awaited here:
+   * the work happens while the user is still typing.
+   */
+  warm?(): void;
+  /**
+   * Release what the provider holds.
+   *
+   * A provider that owns a process — the OpenCode CLI drives one — stops it
+   * here, so nothing outlives the session that asked for it.
+   */
+  close?(): Promise<void>;
 }

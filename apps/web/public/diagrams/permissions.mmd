@@ -1,0 +1,16 @@
+flowchart TD
+  TOOL[Tool request] --> PLAN{Plan and non-read?}
+  PLAN -->|Yes| DENY[Deny]
+  PLAN -->|No| RULE{Explicit deny matches?}
+  RULE -->|Yes| DENY
+  RULE -->|No| OUT{Outside workspace?}
+  OUT -->|Yes| FULL{Full access?}
+  FULL -->|Yes| ALLOW[Allow]
+  FULL -->|No| READPLAN{Plan mode?}
+  READPLAN -->|Yes| DENY
+  READPLAN -->|No| ASK[Ask user]
+  OUT -->|No| MATCH{Matching rule?}
+  MATCH -->|Yes| ACTION[Use rule action]
+  MATCH -->|No| REQUEST{Tool requires approval?}
+  REQUEST -->|Yes| ASK
+  REQUEST -->|No| DEFAULT[Apply mode default]

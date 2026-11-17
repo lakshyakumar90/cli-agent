@@ -1,0 +1,50 @@
+Permissions are evaluated when a tool executes. The parent, workers, extension tools, and MCP tools use the same policy wrapper.
+
+## Choose a mode
+
+| Mode                 | Default behavior                                               |
+| -------------------- | -------------------------------------------------------------- |
+| Ask                  | Reads allowed; writes and execution ask                        |
+| Auto-edit            | Workspace reads and edits allowed; execution asks              |
+| Plan                 | Only read effects; no shell execution or file edits            |
+| Full access (`yolo`) | Calls allowed unless a deny rule or OS restriction blocks them |
+
+Shift+Tab cycles Ask, Auto-edit, and Plan. Full access is an explicit choice in `/permissions` with confirmation, or `--mode yolo` on startup.
+
+<Callout title="Policy is not a sandbox">
+  These rules control registered tools. They do not isolate the operating system
+  or make arbitrary commands safe. Use an isolated environment when you need a
+  stronger boundary.
+</Callout>
+
+## How a decision is made
+
+<Diagram name="permissions" title="Tool permission decision flow" />
+
+Plan restrictions are checked first. Explicit denies remain effective in all modes. Outside-workspace calls require approval except in Full access; Plan refuses them. Matching rules, tool approval requirements, and mode defaults then decide the outcome.
+
+## Add rules
+
+```bash
+agent --allow "bash(git status) allow" --deny "bash(rm *) deny"
+```
+
+Rules describe a tool and matching subject. Prefer narrow allowances. A broad execution allowance permits whatever that command can do. `packages/tools/src/permissions/rules.ts` defines matching behavior.
+
+## Inspect an approval
+
+A request identifies the tool, reason, subject, and requesting worker. Press `d` for complete arguments. Esc denies it. Session grants match literal actions rather than reinterpreting command characters as wildcards.
+
+Mode changes re-evaluate pending requests. Session switches clear grants. Changing policy cannot undo work that already ran. Esc requests cancellation of the active turn.
+
+## Implementation
+
+The files under `packages/tools/src/permissions` divide the work:
+
+- `decide.ts`: pure decision logic and mode defaults.
+- `controller.ts`: current policy, grants, approvals, and cancellation.
+- `wrap.ts`: enforcement before tool execution.
+- `rules.ts`: parsing and matching.
+- `types.ts`: shared request and policy contracts.
+
+The [file guide](/docs/repository) includes the implementation and tests.

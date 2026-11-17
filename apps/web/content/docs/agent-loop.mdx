@@ -1,0 +1,57 @@
+The main loop is an async generator in `packages/core/src/loop.ts`. Interactive UI, print output, JSON, RPC, and subagents consume the same stream.
+
+## Follow one prompt
+
+<Diagram name="agent-loop" title="A prompt from input to answer" />
+
+### Record and prepare
+
+The loop appends the user message to runtime history and the journal. It checks cancellation, turn limits, token budgets, and cost limits. Context assembly selects instructions, environment, tool schemas, and the conversation to send.
+
+When needed, compaction summarizes older content before another request. Prompt construction keeps stable instructions separate from changing environment context to support provider caching.
+
+### Request and accumulate
+
+The provider receives a StreamRequest with model, system prompt, messages, tools, signal, and optional reasoning effort. Each adapter emits normalized events:
+
+```typescript
+type Event =
+  | { t: "text"; delta: string }
+  | { t: "thinking"; delta: string }
+  | { t: "toolCall"; call: ToolCall }
+  | { t: "done"; usage: Usage; stop: StopReason };
+```
+
+This abbreviated view omits optional provider signatures and redacted-thinking fields; the complete contract is in `packages/ai/src/types.ts`.
+
+`accumulate` appends deltas to the assistant message and preserves provider signatures. A tool request produces a display toolStart event; execution waits until the provider turn is assembled. The completed assistant turn is journaled before tool results.
+
+### Validate and execute
+
+The runtime resolves the requested tool and validates its arguments. PreToolUse hooks can refuse a request. The wrapped tool checks current permissions before its body runs. Read-only calls may run together; mutating operations are sequenced to avoid racing writes.
+
+Tool failures become result messages with error state. PostToolUse can add diagnostic output. Large output is shrunk, foreign content is framed as untrusted where configured, and each result retains the originating call ID. Results enter history and the journal before the next model request.
+
+### Stop or repeat
+
+If tools were requested, the model sees their results on the next iteration. Otherwise the loop completes with usage and a stop reason. Limits can end a run for cancellation, budget exhaustion, repeated calls, or maximum turns. Cancellation also settles unanswered tool calls so replay does not leave invalid dangling references.
+
+## Context helpers
+
+| File             | Role                               |
+| ---------------- | ---------------------------------- |
+| `prompt.ts`      | Build ordered system sections      |
+| `context.ts`     | Assemble the context for a request |
+| `tokens.ts`      | Estimate token use                 |
+| `budget.ts`      | Allocate context and cost budgets  |
+| `compact.ts`     | Summarize older conversation       |
+| `shrink.ts`      | Bound long tool output             |
+| `untrusted.ts`   | Frame foreign tool content         |
+| `checkpoints.ts` | Keep change checkpoints            |
+| `retry.ts`       | Bounded retry and abort behavior   |
+
+These files live in `packages/core/src`. The [file guide](/docs/repository) lists tests and exported entry points.
+
+## Why the loop does not print
+
+An async stream separates execution from presentation. A worker can run the same engine without rendering a terminal, while JSON and RPC consumers preserve machine-readable events. UI controls do not need to understand a vendor's SSE format or mutate the underlying message history.

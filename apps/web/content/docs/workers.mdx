@@ -1,0 +1,45 @@
+Workers receive a bounded task with separate context. Read-only workers can share the workspace. Writing workers can use isolated Git worktrees; their changes still need inspection and merge handling.
+
+## Roles and requests
+
+Built-ins include explorer, planner, coder, and reviewer. Project roles live in `.myagent/agents/`, user-wide roles in `~/.myagent/agents/`. A role declares its model, tools, and prompt:
+
+```markdown
+---
+name: reviewer
+model: gemini/your-model
+tools: [read, grep, glob]
+---
+
+Review for correctness and missing tests. Return ranked findings.
+```
+
+The model delegates through `task`. The UI and task tool share `WorkerManager`, so progress and cancellation describe the same work.
+
+## Worker lifecycle
+
+<Diagram name="workers" title="A bounded worker lifecycle" />
+
+The manager owns concurrency, cancellation, timeouts, budgets, follow-up queues, and status. The default task-tool configuration allows three concurrent workers and one delegation level; callers can configure these. Each role gets only its named tools, still behind the shared permission controller.
+
+## Inspect and control
+
+Open `/tasks`, `/subagents`, or Ctrl+B. Detail views show transcripts and status. Use `s` to stop, `f` to queue a follow-up, and `r` to resume eligible work. The parent receives a bounded report rather than the entire worker conversation.
+
+Worktrees may be retained after cancellation for inspection. A failed merge is a problem to resolve, not proof that changes reached the parent. Review the diff before continuing.
+
+## Read-only review
+
+`/review` supports uncommitted changes, a base branch, or a commit through its selector. It captures a fixed diff and fingerprint before asking for findings. The reviewer receives read-only tools, not editing or shell tools.
+
+Results explicitly distinguish completed, incomplete, failed, and cancelled states. Findings contain priority, path, line, title, and explanation. Malformed output is failure, not a clean review. Oversized and binary omissions are disclosed. A changed working tree makes the captured result stale.
+
+Press `f` in review detail to draft a separate fix request. Review itself never applies a patch. Use `/diff` to inspect changes independently.
+
+## Source map
+
+- `packages/core/src/agents/worker-manager.ts`: lifetimes, queues, and status.
+- `roles.ts`: role discovery and built-in definitions.
+- `isolation.ts`: worktree creation, merge, and cleanup.
+- `task-tool.ts`: model-facing delegation and reports.
+- `packages/cli/src/review.ts`: snapshots, output validation, and review runs.

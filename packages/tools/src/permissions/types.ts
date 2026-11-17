@@ -37,6 +37,9 @@ export interface PermissionRule {
 
 /** What the agent is being asked to do. */
 export interface PermissionRequest {
+  id?: string;
+  agentId?: string;
+  cwd?: string;
   /** The tool that wants to run. */
   tool: string;
   /** What the tool does to the world. */
@@ -61,4 +64,5 @@ export type PermissionDecision = "allow" | "deny" | "allow-always";
 /** Asked when a call needs permission. */
 export type AskPermission = (
   request: PermissionRequest,
+  signal?: AbortSignal,
 ) => Promise<PermissionDecision>;

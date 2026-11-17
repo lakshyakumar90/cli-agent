@@ -1,0 +1,68 @@
+Performance has several independent meanings here: time to the first model response, responsiveness while tools run, prompt size and cost, startup time, website loading, and documentation build time. Improving one does not prove the others improved.
+
+## Where does a turn spend time?
+
+A turn includes context assembly, provider or CLI startup, remote queue/inference, tool execution, persistence, and rendering. Tool turns repeat that cycle. A slow model response cannot be diagnosed from the spinner alone.
+
+Measure time to first provider event and first visible text separately. Some providers send thinking before text; OpenCode JSONL may emit completed part snapshots rather than token-sized deltas. A thinking preview reflects data actually received, not an estimate of hidden progress.
+
+## What optimizations exist today?
+
+| Area              | Current implementation                                        | Tradeoff                                                                             |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Terminal output   | Differential rendering and display blocks updated by identity | State/reconciliation must be correct to prevent duplicate thinking or prompts        |
+| OpenCode output   | Buffered JSONL framing and part-ID snapshot normalization     | Completed snapshots can delay visible text even when the remote model is streaming   |
+| Cancellation      | AbortSignal and subprocess-tree termination                   | Platform process cleanup still needs real integration checks                         |
+| Context           | Token estimates, model limits, compaction                     | Estimates can differ from provider tokenization; compaction can lose detail          |
+| Workers           | Bounded concurrent task lifetimes                             | More concurrency can multiply prompt cost and provider throttling                    |
+| Docs HTML         | Statically generated guide routes                             | Build time grows with content; runtime interactions still need JavaScript            |
+| Code highlighting | Shiki runs on the server                                      | Build CPU and generated HTML size increase                                           |
+| Diagrams          | Mermaid imported near the viewport                            | First diagram has extra download/CPU work; SVG generation could move to build time   |
+| Search            | Local full-text corpus                                        | No service dependency, but browser payload and linear scanning grow with corpus size |
+
+## Complexity and scale limits
+
+Replaying a conversation costs at least O(n) in the amount of serialized history. Snapshot comparisons cost O(p) in a part's text length; frequent growing snapshots can create repeated work. Accumulated transcript memory grows with retained text and tool output, even if only a viewport is visible.
+
+The browser's simple search scans documents/content for each query; it is suitable for the present small guide corpus, not an unbounded wiki. The source reference loads a generated file index rather than walking the server filesystem for each visitor. Mermaid complexity depends on the graph and layout, so node count alone is not an adequate render-time predictor.
+
+Worker concurrency is not free throughput. Independent remote calls may overlap, while shared rate limits, disk access, context duplication, and CPU-bound tools can make additional workers slower or more expensive. Measure throughput and tail latency with the same task set before changing defaults.
+
+## What has actually been measured?
+
+The previous verified website build generated 21 static routes. Its cached webpack compilation reported about 32 seconds, and the four production-browser checks completed in about 48 seconds on this Windows development machine. These are development workflow observations from the earlier site revision, **not benchmarks for the redesign**, Lighthouse scores, or production latency guarantees.
+
+The initial cold build was substantially slower than the cached build. Filesystem cache, antivirus scanning, dependency cold starts, and concurrent processes can affect these observations. No controlled comparison against Astro, Rust, Go, Turbopack, or another hosting provider has been run. No production p95 latency, field Core Web Vitals, sustained worker throughput, or peak-memory benchmark is currently available.
+
+## How to reproduce useful measurements
+
+The OpenCode regression smoke check on 2026-11-16 used local CLI 2.2.5 and two concurrent test requests. All 12 currently listed free OpenCode models returned `OK`. Observed end-to-end calls ranged roughly from 15 to 49 seconds, including private-process startup and remote inference while other verification jobs ran. These are smoke-test observations, not controlled latency benchmarks. A Beam Free host-tool/result round trip also returned the exact host result, and a forced native shell request was blocked without creating its test file.
+
+Build the exact revision and run the production server. Record the commit, OS, CPU, Node/pnpm versions, cold or warm cache, network conditions, and concurrency. Use at least several repeats and report median and slowest samples rather than one number.
+
+```bash
+pnpm --filter @cli-agent/web build
+pnpm --filter @cli-agent/web start
+pnpm --filter @cli-agent/web test:e2e
+pnpm --filter @cli-agent/ai test
+```
+
+Use browser performance tooling on a production build with a fixed mobile/network profile. Inspect transferred JavaScript, LCP, CLS, interaction latency, and the first Mermaid render. Bundle sizes on disk are diagnostic inputs, not equivalent to compressed transfer sizes.
+
+For the CLI, record startup, time to first event, time to first text, total turn time, peak memory, token usage, and tool durations. Use deterministic fixture providers to isolate renderer/runtime overhead; use repeated live trials separately to characterize provider variation. Never include credentials or private prompts in a public performance report.
+
+## What should be optimized next?
+
+Start with a measured user-visible bottleneck. Pre-rendered SVG can reduce browser work; a smaller search index can reduce initial transfer; incremental transcript indexing can reduce large-session scans; native binary packaging can improve distribution. Each adds maintenance or build complexity and needs before/after evidence.
+
+Webpack is selected explicitly for the current MDX pipeline. Turbopack is an alternative worth testing for development/build speed, but a faster compile is only useful if MDX, remark/rehype transforms, diagram imports, and static routes stay correct. Avoid a framework migration solely on one cold build.
+
+## Decision questions and proposed budgets
+
+- Is the delay before the subprocess, before the first model event, or in the renderer?
+- Can a deterministic fixture reproduce it without a network call?
+- Does the change reduce user latency, provider cost, or only developer build time?
+- What memory/context size makes the current design uncomfortable?
+- Would more concurrency exceed account limits or duplicate expensive context?
+
+Proposed targets should be agreed for a specific workload and machine before acceptance. Do not describe an unmeasured target as an achieved result. See [infrastructure](/docs/infrastructure) for deployment choices and [decision records](/docs/decisions) for replacement triggers.

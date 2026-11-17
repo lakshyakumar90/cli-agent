@@ -1,0 +1,62 @@
+Work from the repository root with the pnpm version declared in `package.json`. Preserve existing changes and keep implementation updates close to their tests and documentation.
+
+## Install dependencies
+
+```bash
+pnpm install
+```
+
+Runtime packages expose TypeScript source to the workspace. The CLI's tsup build bundles them for distribution; you do not need a separate published package for each internal module.
+
+## Run focused checks
+
+```bash
+pnpm --filter @cli-agent/ai test
+pnpm --filter @cli-agent/tools test
+pnpm --filter @cli-agent/core test
+pnpm --filter @cli-agent/cli test
+pnpm --filter @cli-agent/web test
+```
+
+Use package `check-types` scripts after a contract change. A provider change needs protocol tests, not just a rendered answer. A terminal change needs screen-cell checks. A website change needs content, production-build, and browser interaction checks.
+
+## Build consumers
+
+```bash
+pnpm --filter @cli-agent/cli build
+pnpm --filter @cli-agent/web build
+```
+
+Root scripts also orchestrate checks through Turborepo. Read `AGENTS.md` and the docs bundled with the installed Turbo version before changing task configuration. Lint support varies by workspace configuration; a passing lint command is not a substitute for TypeScript and runtime verification.
+
+## Provider fixtures
+
+Adapters are tested against deterministic fixtures and mock servers. Recorded vendor bytes live in `packages/ai/src/fixtures`; its README distinguishes recordings. Re-recording uses live accounts and may incur provider costs:
+
+```bash
+pnpm --filter @cli-agent/ai record:fixtures
+```
+
+Do not replace a fixture solely to make a regression disappear. Preserve legitimate repeated text and provider signatures when changing normalization.
+
+## Evals and terminal checks
+
+```bash
+pnpm --filter @cli-agent/core eval
+pnpm --filter @cli-agent/cli exec tsx scripts/terminal-smoke.ts
+```
+
+The eval suite exercises tasks in disposable repositories. Live-model results depend on credentials, availability, and quotas. Inspect the runner and configuration before invoking live work. The terminal smoke fixture uses a fake provider and no network.
+
+## Update docs with code
+
+Add or amend an MDX guide for behavior changes. Run the repository documentation generator after moving files. Folder READMEs contain local file maps; edit handwritten explanations outside generated marker blocks.
+
+```bash
+node scripts/document-repository.mjs --readmes
+pnpm --filter @cli-agent/web test
+```
+
+## Release locally
+
+Build the CLI, use `npm pack` inside `packages/cli`, and validate the tarball in a clean installation before updating your global command. The [installation guide](/docs/installation) contains the exact commands. Publishing a package or deploying a site is a separate action from building it.

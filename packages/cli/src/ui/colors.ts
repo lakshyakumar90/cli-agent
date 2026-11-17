@@ -11,6 +11,7 @@ const CODES = {
   dim: "2",
   italic: "3",
   underline: "4",
+  reverse: "7",
   red: "31",
   green: "32",
   yellow: "33",
@@ -18,6 +19,7 @@ const CODES = {
   magenta: "35",
   cyan: "36",
   gray: "90",
+  highlight: "44",
 } as const;
 
 export type ColorName = keyof typeof CODES;
@@ -53,6 +55,7 @@ export function color(text: string, name: ColorName): string {
 export const bold = (text: string): string => color(text, "bold");
 export const dim = (text: string): string => color(text, "dim");
 export const italic = (text: string): string => color(text, "italic");
+export const underline = (text: string): string => color(text, "underline");
 export const red = (text: string): string => color(text, "red");
 export const green = (text: string): string => color(text, "green");
 export const yellow = (text: string): string => color(text, "yellow");
@@ -60,6 +63,8 @@ export const blue = (text: string): string => color(text, "blue");
 export const magenta = (text: string): string => color(text, "magenta");
 export const cyan = (text: string): string => color(text, "cyan");
 export const gray = (text: string): string => color(text, "gray");
+/** The bar under the thing that is picked. */
+export const highlight = (text: string): string => color(text, "highlight");
 
 /** Remove every escape sequence from some text. */
 export function stripAnsi(text: string): string {

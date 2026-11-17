@@ -1,0 +1,34 @@
+Agent is a coding assistant that runs in your terminal. It reads files, applies changes through tools, runs approved commands, and keeps a conversation you can return to. You choose the model provider and level of access.
+
+## Start with a task
+
+- [Install the command](/docs/installation) from this repository.
+- [Run your first session](/docs/quickstart) inside a project.
+- [Connect a model](/docs/providers) with an API key or supported CLI sign-in.
+- [Choose permissions](/docs/permissions) before giving it work.
+
+```bash
+agent --cwd ./my-project --mode plan
+```
+
+Ask a concrete question: “Trace how a request reaches the database. Cite the files.” Plan mode lets the agent inspect the project without editing files or executing shell commands.
+
+## What you control
+
+Model selection, live permission controls, saved sessions, worker transcripts, and read-only review belong to the same CLI. Model changes between turns are visible in the transcript. Provider-supplied thinking has a bounded live preview; Alt+I or `/inspect` opens the full latest thinking or tool output.
+
+<Callout title="A local client, connected to a model">
+  Tools execute on your computer. Relevant messages and code context go to the
+  selected provider. MCP services receive their tool arguments. Local-first does
+  not mean offline inference or that code never leaves your machine.
+</Callout>
+
+## Understand the implementation
+
+This is also a guide to building a coding agent. Follow the [architecture](/docs/architecture), trace [one turn through the loop](/docs/agent-loop), and use the [file guide](/docs/repository) to locate each implementation and test.
+
+The website is documentation, not a hosted agent service. It does not request API keys or execute its terminal preview. Preview sessions on the homepage are illustrative.
+
+## Project boundaries
+
+Permissions are application policy, not an operating-system sandbox. Provider subscriptions and quotas are separate from this project. Replace placeholder model IDs with models your account can use. The OpenCode bridge requires a compatible local OpenCode v2 installation.

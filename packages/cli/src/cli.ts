@@ -5,14 +5,14 @@ import { stdin as input, stdout as output } from "node:process";
 import { parseArgs, HELP, DEFAULT_MODEL } from "./args.js";
 import { runJson, runPrint, runRpc } from "./commands.js";
 import { createSession } from "./session.js";
-import { buildCatalog, defaultFreeModel } from "./catalog.js";
+import { buildCatalog, defaultFreeModel, rememberedFreeModel } from "./catalog.js";
 import { InteractiveUi } from "./ui/interactive.js";
 import { setColors, shouldUseColors } from "./ui/colors.js";
 import { loadAgents } from "./agents.js";
-import { createProvider } from "@cli-agent/ai";
 import { AuthManager } from "@cli-agent/ai";
 import { AuthError } from "@cli-agent/ai";
 import type { AskPermission } from "@cli-agent/tools";
+import { createInterface } from "node:readline";
 
 async function main(): Promise<number> {
   const parsed = parseArgs(process.argv.slice(2));
@@ -34,7 +34,7 @@ async function main(): Promise<number> {
   // today. A user who chose a model keeps it.
   const model =
     options.model === DEFAULT_MODEL
-      ? await defaultFreeModel().catch(() => DEFAULT_MODEL)
+      ? await freeModelToStartWith()
       : options.model;
 
   // Esc stops the turn that is running.
@@ -42,23 +42,32 @@ async function main(): Promise<number> {
 
   // The permission prompt: one line, one answer.
   const askPermission: AskPermission = async (request) => {
-    process.stderr.write(
-      `\n${request.reason}\n[y]es / [n]o / [a]lways? `,
-    );
+    // There is nobody to answer: the call is refused, and it is said why.
+    // A question that cannot be answered must not hold the agent up, and
+    // the way to permit the call is on the command line.
+    if (input.isTTY !== true) {
+      process.stderr.write(
+        `\n${request.reason}\nrefused: there is nobody to answer — run with --mode auto-edit, or --allow, to permit it.\n`,
+      );
+      return "deny";
+    }
+    process.stderr.write(`\n${request.reason}\n[y]es / [n]o / [a]lways? `);
     const answer = (await readLine("")).trim().toLowerCase();
     if (answer.startsWith("a")) return "allow-always";
     return answer.startsWith("y") ? "allow" : "deny";
   };
-
   let built;
   try {
     built = await createSession({
       model,
       cwd: options.cwd,
       permissionMode: options.permissionMode,
+      restoreModel: options.model === DEFAULT_MODEL,
       rules: options.rules,
-      ask: askPermission,
-      continueLast: options.continueLast,
+      ...(options.mode === "interactive" ? {} : { ask: askPermission }),
+      continueLast:
+        options.continueLast ||
+        (options.mode !== "interactive" && options.resume === ""),
       ...(options.resume === undefined ? {} : { resume: options.resume }),
       ...(options.log === undefined ? {} : { log: options.log }),
       ...(options.noLog === true ? { noLog: true } : {}),
@@ -135,6 +144,10 @@ async function main(): Promise<number> {
           input,
           model,
           permissionMode: options.permissionMode,
+          permissions: built.permissions,
+          workerManager: built.workerManager,
+          controller: built.controller,
+          resumePicker: options.resume === "",
           cwd: options.cwd,
           sessionId,
           store,
@@ -142,32 +155,30 @@ async function main(): Promise<number> {
           agents: await loadAgents(),
           roles,
           commands,
+          workers: built.workers,
           ...(state.log?.path === undefined ? {} : { logPath: state.log.path }),
           // The list is asked for when the picker is opened: the free
           // models of a router change from day to day.
-          onModels: async () => (await buildCatalog()).models,
-          onModel: async (ref) => {
-            try {
-              // A provider an extension added is a provider too.
-              const provider = await createProvider(
-                ref.split("/")[0] as string,
-                { providers: built.extensions.providers },
-              );
-              return provider;
-            } catch (error) {
-              process.stderr.write(
-                `${error instanceof Error ? error.message : String(error)}\n`,
-              );
-              return undefined;
-            }
-          },
+          onModels: async (signal) =>
+            buildCatalog({
+              signal,
+              factory: { providers: built.extensions.providers },
+              // The session's own providers: one that owns a process must
+              // not be built a second time.
+              providers: built.providers,
+              providerFor: (id) => built.providerFor(id),
+            }),
+          onModel: async (ref) => built.providerFor(ref),
           onLogin: async (provider) => {
             const auth = new AuthManager();
             try {
               await auth.login(provider);
-              return `signed in to ${provider}`;
+              return { ok: true, message: `signed in to ${provider}` };
             } catch (error) {
-              return error instanceof Error ? error.message : String(error);
+              return {
+                ok: false,
+                message: error instanceof Error ? error.message : String(error),
+              };
             }
           },
         });
@@ -183,18 +194,45 @@ async function main(): Promise<number> {
 /** One line of input from the user. */
 function readLine(prompt: string): Promise<string> {
   return new Promise((resolve) => {
-    const { createInterface } = require("node:readline") as typeof import("node:readline");
     const rl = createInterface({ input, output });
-    rl.question(prompt, (answer) => {
+    let done = false;
+    const finish = (answer: string): void => {
+      if (done) return;
+      done = true;
       rl.close();
       resolve(answer);
-    });
+    };
+    rl.question(prompt, (answer) => finish(answer));
+    // Nobody is there to answer: the call is refused rather than waited
+    // for. An answer that never comes is not an answer.
+    rl.on("close", () => finish(""));
   });
+}
+
+/**
+ * The free model the session opens with.
+ *
+ * The list of the free models lives on the router, and the answer can
+ * take a while on a slow line. The model that was remembered is used at
+ * once, and the list is only waited for when there is nothing remembered:
+ * a second of standing still before the session opens is a second the
+ * user notices.
+ */
+async function freeModelToStartWith(): Promise<string> {
+  const remembered = await rememberedFreeModel();
+  if (remembered !== undefined) return remembered;
+
+  const answer = defaultFreeModel().catch(() => DEFAULT_MODEL);
+  const deadline = new Promise<string>((resolve) => {
+    const timer = setTimeout(() => resolve(DEFAULT_MODEL), 1_500);
+    timer.unref();
+  });
+
+  return await Promise.race([answer, deadline]);
 }
 
 /** The input, line by line. */
 async function* readLines(): AsyncGenerator<string> {
-  const { createInterface } = require("node:readline") as typeof import("node:readline");
   const rl = createInterface({ input, terminal: false });
   for await (const line of rl) {
     yield line;
@@ -215,7 +253,7 @@ main()
     }
 
     process.stderr.write(
-      `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+      `${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
     );
     process.exitCode = 1;
   });

@@ -16,6 +16,8 @@ import { z, type ZodType } from "zod";
 
 /** What a tool is given when it runs. */
 export interface ToolContext {
+  agentId?: string;
+  workspace?: string;
   /** Directory the agent is working in. */
   cwd: string;
   /** Cancels a long-running tool. */

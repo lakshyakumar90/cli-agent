@@ -24,6 +24,7 @@ import {
   readdir,
   rm,
   writeFile,
+  rename,
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -59,6 +60,8 @@ export interface SessionMeta {
   updatedAt: string;
   /** How many entries the session has. */
   entries: number;
+  parentSessionId?: string;
+  forkEntryId?: string;
   /** The first thing that was asked, for the list. */
   title?: string;
 }
@@ -114,17 +117,61 @@ export class SessionStore {
 
   /** The file of a session. */
   path(id: string): string {
+    this.validateId(id);
     return join(this.dir(), `${id}.jsonl`);
   }
 
   /** The file of a session's details. */
   metaPath(id: string): string {
+    this.validateId(id);
     return join(this.dir(), `${id}.json`);
   }
 
   /** The session that is open. */
   get id(): string | undefined {
     return this.current;
+  }
+
+  private validateId(id: string): void {
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid session ID");
+  }
+
+  async metadata(id = this.current): Promise<SessionMeta | undefined> {
+    return id === undefined ? undefined : this.meta(id);
+  }
+
+  async updateMetadata(
+    patch: Partial<Pick<SessionMeta, "model" | "title">>,
+    id = this.current,
+  ): Promise<void> {
+    if (id === undefined) return;
+    await this.writeMeta(id, {
+      ...(await this.meta(id)),
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async loadUi<T>(fallback: T, id = this.current): Promise<T> {
+    if (id === undefined) return fallback;
+    this.validateId(id);
+    try {
+      return JSON.parse(
+        await readFile(join(this.dir(), `${id}.ui`), "utf8"),
+      ) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async saveUi(value: unknown, id = this.current): Promise<void> {
+    if (id === undefined) return;
+    this.validateId(id);
+    await mkdir(this.dir(), { recursive: true });
+    const path = join(this.dir(), `${id}.ui`);
+    const temporary = `${path}.${newId()}.tmp`;
+    await writeFile(temporary, JSON.stringify(value), "utf8");
+    await rename(temporary, path);
   }
 
   /** Start a new session. */
@@ -187,13 +234,20 @@ export class SessionStore {
    */
   async append(
     msg: Msg,
-    options: { compacted?: boolean; model?: string; parent?: string | null } = {},
+    options: {
+      compacted?: boolean;
+      model?: string;
+      parent?: string | null;
+    } = {},
   ): Promise<string> {
     const id = this.current ?? (await this.create({ model: options.model }));
 
     const entry: SessionEntry = {
       id: newId("a"),
-      parent: options.parent === undefined ? (this.lastEntry ?? null) : options.parent,
+      parent:
+        options.parent === undefined
+          ? (this.lastEntry ?? null)
+          : options.parent,
       msg,
       at: new Date().toISOString(),
       ...(options.model === undefined ? {} : { model: options.model }),
@@ -209,6 +263,10 @@ export class SessionStore {
     const meta = await this.meta(id);
     await this.writeMeta(id, {
       ...meta,
+      ...(meta.title === undefined && msg.role === "user"
+        ? { title: msg.content.slice(0, 100) }
+        : {}),
+      ...(options.model === undefined ? {} : { model: options.model }),
       updatedAt: entry.at ?? new Date().toISOString(),
       entries: meta.entries + 1,
     });
@@ -290,15 +348,22 @@ export class SessionStore {
 
     const id = newId();
     await mkdir(this.dir(), { recursive: true });
-    await writeFile(this.path(id), "", "utf8");
+    const inherited = entries.slice(0, entries.indexOf(from) + 1);
+    await writeFile(
+      this.path(id),
+      inherited.map((entry) => JSON.stringify(entry)).join("\n") + "\n",
+      "utf8",
+    );
 
     const now = new Date().toISOString();
     await this.writeMeta(id, {
       cwd: this.cwd,
-      model: options.model ?? "",
+      model: options.model ?? (await this.meta(sessionId)).model,
       createdAt: now,
       updatedAt: now,
-      entries: 0,
+      entries: inherited.length,
+      parentSessionId: sessionId,
+      forkEntryId: fromEntryId,
     });
 
     this.current = id;
@@ -364,12 +429,18 @@ export class SessionStore {
     }
   }
 
-  private async writeMeta(id: string, meta: Omit<SessionMeta, "id">): Promise<void> {
+  private async writeMeta(
+    id: string,
+    meta: Omit<SessionMeta, "id">,
+  ): Promise<void> {
     await mkdir(this.dir(), { recursive: true });
+    const path = this.metaPath(id);
+    const temporary = `${path}.${newId()}.tmp`;
     await writeFile(
-      this.metaPath(id),
+      temporary,
       `${JSON.stringify({ ...meta, id }, null, 2)}\n`,
       "utf8",
     );
+    await rename(temporary, path);
   }
 }

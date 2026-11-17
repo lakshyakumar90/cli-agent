@@ -1,0 +1,1334 @@
+[
+  {
+    "path": ".gitignore",
+    "description": "Exclude dependencies, generated builds, local secrets, runtime state, and temporary artifacts from version control."
+  },
+  {
+    "path": "AGENTS.md",
+    "description": "Repository-specific contributor instructions, including the requirement to read installed Turborepo docs before changing tasks."
+  },
+  {
+    "path": "apps/web/.gitignore",
+    "description": "Keep Next.js output, TypeScript caches, and Playwright artifacts out of version control."
+  },
+  {
+    "path": "apps/web/app/docs/[[...slug]]/page.tsx",
+    "description": "Generate MDX guide routes, metadata, grouped navigation, contents links, and adjacent-page controls."
+  },
+  {
+    "path": "apps/web/app/globals.css",
+    "description": "Shared color and typography tokens, landing/docs styles, responsive layouts, focus states, and reduced-motion rules."
+  },
+  {
+    "path": "apps/web/app/icon.svg",
+    "description": "Original terminal-prompt favicon."
+  },
+  {
+    "path": "apps/web/app/layout.tsx",
+    "description": "Root HTML shell, metadata, self-hosted fonts, shared header, and global stylesheet."
+  },
+  {
+    "path": "apps/web/app/not-found.tsx",
+    "description": "Recoverable 404 page with links to documentation and home."
+  },
+  {
+    "path": "apps/web/app/page.tsx",
+    "description": "Landing page: interactive terminal workflows, features, providers, source installation, and FAQ."
+  },
+  {
+    "path": "apps/web/app/redesign.css",
+    "description": "redesign.css supports App Router routes, root layout, metadata, and responsive global styles.."
+  },
+  {
+    "path": "apps/web/app/robots.ts",
+    "description": "Public crawler rules for the documentation website."
+  },
+  {
+    "path": "apps/web/components/brand.tsx",
+    "description": "Reusable original Agent wordmark and terminal-prompt SVG."
+  },
+  {
+    "path": "apps/web/components/code-block.tsx",
+    "description": "Server-side Shiki highlighting, code copying, and Mermaid fence detection."
+  },
+  {
+    "path": "apps/web/components/copy-button.tsx",
+    "description": "Clipboard button with explicit copied and failure feedback."
+  },
+  {
+    "path": "apps/web/components/diagram.tsx",
+    "description": "Read an allowed local .mmd asset on the server and expose rendered/source/download views."
+  },
+  {
+    "path": "apps/web/components/file-reference.tsx",
+    "description": "Search and group the checked-in source inventory with repository links."
+  },
+  {
+    "path": "apps/web/components/header.tsx",
+    "description": "Shared site navigation, source link, and server-populated documentation search."
+  },
+  {
+    "path": "apps/web/components/mermaid.tsx",
+    "description": "Lazy, strictly secured Mermaid rendering with serialized work, captions, source, and fallback."
+  },
+  {
+    "path": "apps/web/components/provider-switcher.tsx",
+    "description": "Provider connectivity tabs with requirements and copyable command examples."
+  },
+  {
+    "path": "apps/web/components/REHEARSAL.md",
+    "description": "Gold: Stageshow 1.1.1 `static-card`. Kept the masked composition and one dominant product surface; changed the subject to the actual Agent terminal workflow and used the kit's terminal Window. The reference was bundled and captured locally before the final visual pass. States: Explore, Build, Review"
+  },
+  {
+    "path": "apps/web/components/search.tsx",
+    "description": "Keyboard-accessible full-text guide search in a native modal dialog."
+  },
+  {
+    "path": "apps/web/components/stageshow/act.ts",
+    "description": "Defines Act, Script, Stopped, ActEnv, createAct, checkSeam for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/clock.ts",
+    "description": "Defines ClockControl, clock, installVirtualClock for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/cursor.css",
+    "description": "cursor.css supports apps/web/components/stageshow."
+  },
+  {
+    "path": "apps/web/components/stageshow/cursor.tsx",
+    "description": "Defines CursorKind, CursorStyle, Cursor, ripple for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/cursors.tsx",
+    "description": "Defines MacPointer, MacIbeam, MacCrosshair, MacPointingHand, MacOpenHand, MacGrab, MacWait for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/ease.ts",
+    "description": "Defines Bezier, EASE, EaseName, css, bezier, startSlope for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/keys.css",
+    "description": "keys.css supports apps/web/components/stageshow."
+  },
+  {
+    "path": "apps/web/components/stageshow/keys.tsx",
+    "description": "Defines KeysAt, Keys, capsOf, Keycaps for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/looks.ts",
+    "description": "Defines Theme, Palette, Fidelity, Layout, Look, LookContext, useLook for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/measure.ts",
+    "description": "Defines Point, Rect, Target, EMPTY, nameOf, inset, box for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/NOTICE.md",
+    "description": "Vendored from [benjitaylor/skills — Stageshow](https://github.com/benjitaylor/skills/tree/main/stageshow), skill version 1.1.1. Its package declares MIT licensing. Only the Stage and terminal Window dependency closure is retained. Original implementation comments remain in the source. The host's int"
+  },
+  {
+    "path": "apps/web/components/stageshow/reduced-motion.ts",
+    "description": "Defines StillContext, useReducedMotion for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/stage.css",
+    "description": "stage.css supports apps/web/components/stageshow."
+  },
+  {
+    "path": "apps/web/components/stageshow/stage.tsx",
+    "description": "Defines Play, LookTokens, StageProps, Stage for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/util.ts",
+    "description": "Defines isDev, warn, clamp, easeInOutCubic, hash for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/stageshow/window.css",
+    "description": "window.css supports apps/web/components/stageshow."
+  },
+  {
+    "path": "apps/web/components/stageshow/window.tsx",
+    "description": "Defines WindowProps, Window, BarProps, Bar, TextProps, Text, PromptProps for stageshow consumers."
+  },
+  {
+    "path": "apps/web/components/terminal-preview.tsx",
+    "description": "Illustrative Explore, Build, and Review session tabs; no commands execute in the browser."
+  },
+  {
+    "path": "apps/web/content/docs/agent-loop.mdx",
+    "description": "The main loop is an async generator in packages/core/src/loop.ts. Interactive UI, print output, JSON, RPC, and subagents consume the same stream."
+  },
+  {
+    "path": "apps/web/content/docs/architecture.mdx",
+    "description": "The runtime is a TypeScript monorepo with four functional packages. A separate Next.js application provides this landing page and guide. The core never prints; consumers choose how to render its async event stream."
+  },
+  {
+    "path": "apps/web/content/docs/commands.mdx",
+    "description": "Use agent --help for the installed build's flags and /help for interactive commands, including discovered project commands."
+  },
+  {
+    "path": "apps/web/content/docs/contributing.mdx",
+    "description": "Work from the repository root with the pnpm version declared in package.json. Preserve existing changes and keep implementation updates close to their tests and documentation."
+  },
+  {
+    "path": "apps/web/content/docs/decisions.mdx",
+    "description": "These are the tradeoffs visible in the current implementation, with conditions for changing them. They explain the present design; they are not reconstructed historical meeting notes. An alternative can be the better choice for a different workload."
+  },
+  {
+    "path": "apps/web/content/docs/extensions.mdx",
+    "description": "Configure project-specific behavior in .myagent/. Each extension form joins the same tool and permission pipeline."
+  },
+  {
+    "path": "apps/web/content/docs/infrastructure.mdx",
+    "description": "Agent currently runs on the developer's machine. The documentation app is a separate Next.js process with statically generated guide routes. There is no required hosted application server, database, queue, or account system for using the CLI or reading these guides."
+  },
+  {
+    "path": "apps/web/content/docs/installation.mdx",
+    "description": "Build the CLI from the repository, then install its local tarball. These steps do not assume the package has been published to npm."
+  },
+  {
+    "path": "apps/web/content/docs/introduction.mdx",
+    "description": "Agent is a coding assistant that runs in your terminal. It reads files, applies changes through tools, runs approved commands, and keeps a conversation you can return to. You choose the model provider and level of access."
+  },
+  {
+    "path": "apps/web/content/docs/performance.mdx",
+    "description": "Performance has several independent meanings here: time to the first model response, responsiveness while tools run, prompt size and cost, startup time, website loading, and documentation build time. Improving one does not prove the others improved."
+  },
+  {
+    "path": "apps/web/content/docs/permissions.mdx",
+    "description": "Permissions are evaluated when a tool executes. The parent, workers, extension tools, and MCP tools use the same policy wrapper."
+  },
+  {
+    "path": "apps/web/content/docs/providers.mdx",
+    "description": "The loop speaks one internal event format. Adapters translate vendor streams into text, supplied thinking, tool calls, and completion usage."
+  },
+  {
+    "path": "apps/web/content/docs/quickstart.mdx",
+    "description": "Start with a small task and a read-only session. Inspect the model, tool activity, and permission behavior before permitting edits."
+  },
+  {
+    "path": "apps/web/content/docs/repository.mdx",
+    "description": "The repository separates model I/O, tool execution, runtime orchestration, terminal presentation, and this website. The index below describes maintained source and configuration files; generated output, dependency trees, local credentials, and Git internals are excluded."
+  },
+  {
+    "path": "apps/web/content/docs/sessions.mdx",
+    "description": "Sessions preserve the conversation as it happens. The journal is separate from terminal display state, so opening a picker or detail view does not add a model message."
+  },
+  {
+    "path": "apps/web/content/docs/terminal-ui.mdx",
+    "description": "The interactive terminal uses pi-tui's differential renderer. One owner reads input; the UI updates the screen rather than appending a new permission line or thinking label for every state change."
+  },
+  {
+    "path": "apps/web/content/docs/troubleshooting.mdx",
+    "description": "Start with the visible error, selected provider, and installed version. Distinguish an upstream account failure from a local tool or UI problem."
+  },
+  {
+    "path": "apps/web/content/docs/web.mdx",
+    "description": "This website is a separate Next.js App Router workspace at apps/web. It serves the landing page at / and a statically generated MDX guide at /docs and /docs/<slug>."
+  },
+  {
+    "path": "apps/web/content/docs/workers.mdx",
+    "description": "Workers receive a bounded task with separate context. Read-only workers can share the workspace. Writing workers can use isolated Git worktrees; their changes still need inspection and merge handling."
+  },
+  {
+    "path": "apps/web/DESIGN.md",
+    "description": "Record the original visual direction, tokens, typography, research references, and accessibility requirements."
+  },
+  {
+    "path": "apps/web/lib/content.ts",
+    "description": "Server-only MDX reading, full-text search corpus, and heading extraction."
+  },
+  {
+    "path": "apps/web/lib/docs.ts",
+    "description": "Explicit MDX import registry with guide slugs, descriptions, groups, and titles."
+  },
+  {
+    "path": "apps/web/lib/links.ts",
+    "description": "Browser-safe documentation URL and repository URL helpers."
+  },
+  {
+    "path": "apps/web/mdx-components.tsx",
+    "description": "Map MDX elements to highlighted code, responsive tables, callouts, diagrams, and the file guide."
+  },
+  {
+    "path": "apps/web/mdx.d.ts",
+    "description": "Declare local MDX modules as typed React components for the explicit guide import registry."
+  },
+  {
+    "path": "apps/web/next.config.mjs",
+    "description": "Configure local MDX, GFM, heading slugs, supported page extensions, and Next.js headers."
+  },
+  {
+    "path": "apps/web/package.json",
+    "description": "@cli-agent/web: workspace manifest, dev, build, start, check-types, test, test:e2e, docs:generate, and dependencies."
+  },
+  {
+    "path": "apps/web/playwright.config.ts",
+    "description": "Start a production test server and run desktop/mobile browser checks."
+  },
+  {
+    "path": "apps/web/public/diagrams/agent-loop.mmd",
+    "description": "Mermaid source for the agent loop flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/architecture.mmd",
+    "description": "Mermaid source for the architecture flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/decisions.mmd",
+    "description": "Mermaid source for the decisions flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/permissions.mmd",
+    "description": "Mermaid source for the permissions flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/provider-bridge.mmd",
+    "description": "Mermaid source for the provider bridge flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/sessions.mmd",
+    "description": "Mermaid source for the sessions flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/terminal-ui.mmd",
+    "description": "Mermaid source for the terminal ui flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/public/diagrams/workers.mmd",
+    "description": "Mermaid source for the workers flowchart, rendered in the MDX guides."
+  },
+  {
+    "path": "apps/web/scripts/content.test.mjs",
+    "description": "Regression tests for every guide is registered and local documentation links resolve, repository reference matches maintained files and descriptions, Mermaid sources have a flowchart declaration and no embedded HTML."
+  },
+  {
+    "path": "apps/web/tests/site.spec.ts",
+    "description": "Regression tests for all guides render with correct headings and no browser exceptions, workflow and provider tabs, full-text search, and clipboard work, flowcharts render and source reference can find a file."
+  },
+  {
+    "path": "apps/web/tsconfig.json",
+    "description": "Workspace TypeScript compiler settings and source inclusion."
+  },
+  {
+    "path": "apps/web/turbo.json",
+    "description": "Turborepo task dependencies, source inputs, and cache outputs for this scope."
+  },
+  {
+    "path": "package.json",
+    "description": "cli-agent: workspace manifest, build, dev, lint, test, check-types, format, and dependencies."
+  },
+  {
+    "path": "packages/ai/eslint.config.js",
+    "description": "Workspace lint configuration using shared repository presets."
+  },
+  {
+    "path": "packages/ai/package.json",
+    "description": "@cli-agent/ai: workspace manifest, dev, demo:stream, record:fixtures, smoke:live, lint, check-types, test, and dependencies."
+  },
+  {
+    "path": "packages/ai/scripts/demo-stream.ts",
+    "description": "Phase 1 demo: one loop, two providers. The registry resolves a `\"provider/model\"` ref to a provider, and the same `for await` loop streams from whichever backend it points at. With API keys in the environment this talks to the real APIs; without them it falls back to a local server that speaks both wire formats, so the code path is the same either way."
+  },
+  {
+    "path": "packages/ai/scripts/diag-opencode.ts",
+    "description": "Temporary diagnostic: drive the real local opencode provider and print everything it does. Used while fixing the \"Unavailable\" and \"no response\" reports. Delete when done."
+  },
+  {
+    "path": "packages/ai/scripts/live-check.ts",
+    "description": "Live check of the local OpenCode provider against the installed CLI. It answers the questions the unit tests cannot: 1. can the catalog of the CLI be read (the \"Unavailable\" report)? 2. does a turn come back with text (the \"no response\" report)? 3. how long does each part take (the \"too slow\" report)?"
+  },
+  {
+    "path": "packages/ai/scripts/record-fixtures.ts",
+    "description": "Record the streams the vendors send. The tests replay these instead of writing the wire format out by hand, so a change in the format shows up as a failing test."
+  },
+  {
+    "path": "packages/ai/scripts/smoke-live.ts",
+    "description": "Live smoke test: stream from every provider you have credentials for. The credentials come from the environment first, then from the store the agent keeps (`~/.myagent/auth.json`), then from the CLIs already logged in on this machine:"
+  },
+  {
+    "path": "packages/ai/src/auth/browser.ts",
+    "description": "Best-effort browser launch for the OAuth flow. Headless machines are normal (SSH, containers, CI), so a failure here is not an error: the caller also prints the URL, and the user can paste it anywhere."
+  },
+  {
+    "path": "packages/ai/src/auth/cli-import.test.ts",
+    "description": "Regression tests for importing the Codex CLI login."
+  },
+  {
+    "path": "packages/ai/src/auth/cli-import.ts",
+    "description": "Import a credential from a CLI that is already logged in. The Codex CLI keeps its ChatGPT login in `~/.codex/auth.json`. Copying that login in is convenient, but the refresh token is **single use**: refreshing rotates it, and the old one is rejected afterwards (\"refresh_token_reused\")."
+  },
+  {
+    "path": "packages/ai/src/auth/errors.ts",
+    "description": "Failures from the auth layer, distinct from provider call failures."
+  },
+  {
+    "path": "packages/ai/src/auth/index.ts",
+    "description": "Public exports for this module boundary."
+  },
+  {
+    "path": "packages/ai/src/auth/loopback.ts",
+    "description": "Temporary localhost callback server for the authorization-code flow. The OAuth app redirects the browser to `http://127.0.0.1:<port>/callback`; this server answers exactly one request, hands the code back to the login flow and shuts down. Binding to 127.0.0.1 (not 0.0.0.0) keeps the listener off the network, and the `state` check rejects callbacks this process did not initiate."
+  },
+  {
+    "path": "packages/ai/src/auth/manager.test.ts",
+    "description": "Regression tests for credential resolution, oauth refresh, oauth login."
+  },
+  {
+    "path": "packages/ai/src/auth/manager.ts",
+    "description": "Credential resolution and the interactive OAuth login. `get()` is the only call the rest of the app needs: it checks the environment first, then `auth.json`, and transparently refreshes an expiring OAuth token. `refreshOnUnauthorized()` covers the other half of the contract — a token can be revoked before its `expires` timestamp, so a 401 triggers one refresh and one retry at the call site."
+  },
+  {
+    "path": "packages/ai/src/auth/oauth.test.ts",
+    "description": "Regression tests for pkce, buildAuthorizeUrl, exchangeCode."
+  },
+  {
+    "path": "packages/ai/src/auth/oauth.ts",
+    "description": "OAuth token endpoint calls: the authorization-code exchange and refresh. Both are `application/x-www-form-urlencoded` POSTs (RFC 6749 §4.1.3, §6). The response parser only trusts what it validates: a missing `access_token` is a protocol failure, and an `expires_in` string is coerced to seconds so callers never have to think about it."
+  },
+  {
+    "path": "packages/ai/src/auth/pkce.ts",
+    "description": "PKCE (RFC 7636) primitives. The verifier never leaves this process; the challenge goes to the browser. `S256` is the only method modern providers accept, so it is the only one implemented."
+  },
+  {
+    "path": "packages/ai/src/auth/specs.ts",
+    "description": "Per-provider auth policy. Two kinds of provider:"
+  },
+  {
+    "path": "packages/ai/src/auth/store.test.ts",
+    "description": "Regression tests for auth store."
+  },
+  {
+    "path": "packages/ai/src/auth/store.ts",
+    "description": "`auth.json` on disk. Location: `$MYAGENT_HOME/auth.json`, defaulting to `~/.myagent/auth.json`. The file holds refresh tokens, so it is created `0600` in a `0700` directory and rewritten atomically (temp file + rename) — a reader never sees a half-written file, and a crash cannot leave a truncated credential store."
+  },
+  {
+    "path": "packages/ai/src/auth/types.ts",
+    "description": "Credential shapes shared by the store and the auth manager. On disk (`~/.myagent/auth.json`) this is exactly the format the guide uses:"
+  },
+  {
+    "path": "packages/ai/src/available.test.ts",
+    "description": "Regression tests for what a provider can serve, the free models."
+  },
+  {
+    "path": "packages/ai/src/errors.ts",
+    "description": "Errors thrown by provider adapters, in a shape the agent loop can act on."
+  },
+  {
+    "path": "packages/ai/src/factory.test.ts",
+    "description": "Regression tests for the provider factory."
+  },
+  {
+    "path": "packages/ai/src/factory.ts",
+    "description": "Building a provider from an id. The registry resolves \"provider/model\" refs; this builds the provider behind the id, with the credentials the auth layer finds (the environment first, then auth.json)."
+  },
+  {
+    "path": "packages/ai/src/fake.ts",
+    "description": "The fake provider. A provider that answers what it is told to answer, so a test can say what the model says and what it does. It is the same thing for every test: the loop, the tools, the permissions and the sessions can all be tried without a network and without a key."
+  },
+  {
+    "path": "packages/ai/src/fixtures/anthropic-stream.txt",
+    "description": "Recorded anthropic stream wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/codex-stream.txt",
+    "description": "Recorded codex stream wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/codex-tool-call.txt",
+    "description": "Recorded codex tool call wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/gemini-stream.txt",
+    "description": "Recorded gemini stream wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/gemini-tool-call.txt",
+    "description": "Recorded gemini tool call wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/openai-compat-stream.txt",
+    "description": "Recorded openai compat stream wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures/openai-compat-tool-call.txt",
+    "description": "Recorded openai compat tool call wire bytes for adapter replay tests; consult the fixture README for provenance."
+  },
+  {
+    "path": "packages/ai/src/fixtures.test.ts",
+    "description": "Regression tests for the Gemini adapter, on a recorded stream, the OpenAI adapter, on a recorded stream, the Codex adapter, on a recorded stream."
+  },
+  {
+    "path": "packages/ai/src/fixtures.ts",
+    "description": "The recorded streams. A provider adapter is only as good as the bytes it is given. These are the bytes the vendors actually sent, recorded as they came, and the tests replay them: a change in the wire format shows up as a test that fails, not as an agent that breaks in the middle of a task."
+  },
+  {
+    "path": "packages/ai/src/index.ts",
+    "description": "Public exports for this module boundary."
+  },
+  {
+    "path": "packages/ai/src/missing-provider.test.ts",
+    "description": "Regression tests for a provider with no credentials."
+  },
+  {
+    "path": "packages/ai/src/models.test.ts",
+    "description": "Regression tests for model table, pricing, cost estimation."
+  },
+  {
+    "path": "packages/ai/src/models.ts",
+    "description": "The model table. One place that knows what each model costs and what it can do, so later phases can budget tokens and pick a model without hard-coding vendor knowledge. Prices are per **million** tokens, in USD."
+  },
+  {
+    "path": "packages/ai/src/providers/anthropic.test.ts",
+    "description": "Regression tests for anthropic stream, anthropic request, anthropic errors."
+  },
+  {
+    "path": "packages/ai/src/providers/anthropic.ts",
+    "description": "Anthropic provider (`POST {baseUrl}/messages`, SSE). Anthropic's wire format differs from OpenAI's in ways this adapter hides: - content is a list of typed blocks, not a message string; - tool results are `user` messages containing `tool_result` blocks, and all results answering one assistant turn must share a single user message; - `max_tokens` is mandatory; - auth is `x-api-key` (or a bearer token for OAuth-style s"
+  },
+  {
+    "path": "packages/ai/src/providers/antigravity.test.ts",
+    "description": "Regression tests for antigravity, antigravity discoverProject."
+  },
+  {
+    "path": "packages/ai/src/providers/antigravity.ts",
+    "description": "Google Antigravity (Cloud Code Assist) provider. Antigravity and the Gemini CLI talk to the same private backend, and its wire format is the Gemini one: `contents`, `parts`, `functionCall`, SSE chunks. Only three things differ, all of them confined to this file:"
+  },
+  {
+    "path": "packages/ai/src/providers/codex.test.ts",
+    "description": "Regression tests for codex preset."
+  },
+  {
+    "path": "packages/ai/src/providers/codex.ts",
+    "description": "OpenAI Codex provider. This is the backend the Codex CLI itself talks to: a ChatGPT subscription endpoint, not the public API. It speaks the Responses wire format, so the whole translation lives in `responses.ts`; only four things differ here:"
+  },
+  {
+    "path": "packages/ai/src/providers/gemini.test.ts",
+    "description": "Regression tests for gemini stream, gemini request, gemini errors."
+  },
+  {
+    "path": "packages/ai/src/providers/gemini.ts",
+    "description": "Google Gemini provider. Speaks `streamGenerateContent` over SSE — the wire format shared by the Gemini API and the Antigravity / Gemini CLI backend in ./antigravity.ts, so both share this one implementation."
+  },
+  {
+    "path": "packages/ai/src/providers/local-opencode.test.ts",
+    "description": "Regression tests for local opencode."
+  },
+  {
+    "path": "packages/ai/src/providers/local-opencode.ts",
+    "description": "Bridge OpenCode v2 JSONL into provider events, isolate native tools, validate host-tool requests, and surface process failures."
+  },
+  {
+    "path": "packages/ai/src/providers/normalization.test.ts",
+    "description": "Regression tests for normalization."
+  },
+  {
+    "path": "packages/ai/src/providers/openai-compat.test.ts",
+    "description": "Regression tests for openaiCompat stream, openaiCompat request, openaiCompat errors."
+  },
+  {
+    "path": "packages/ai/src/providers/openai-compat.ts",
+    "description": "OpenAI-compatible provider. One adapter covers OpenAI, OpenCode Zen, OpenRouter, Ollama, LM Studio and vLLM — anything that speaks `POST {baseUrl}/chat/completions` with SSE streaming. Only `baseUrl`, auth and model metadata differ."
+  },
+  {
+    "path": "packages/ai/src/providers/responses.test.ts",
+    "description": "Regression tests for responses stream, responses tool calls, responses stop reasons."
+  },
+  {
+    "path": "packages/ai/src/providers/responses.ts",
+    "description": "OpenAI Responses API provider (`POST {baseUrl}/responses`, SSE). Shares OpenAI's identity/auth with the chat-completions adapter, but not its wire format: `input` is a flat list of typed items, tools are flattened, the system prompt is `instructions`, and the stream is a sequence of named `response.*` events."
+  },
+  {
+    "path": "packages/ai/src/registry.test.ts",
+    "description": "Regression tests for provider registry, streaming through the registry."
+  },
+  {
+    "path": "packages/ai/src/registry.ts",
+    "description": "One streaming entry point for every provider. The registry holds providers under short ids (`anthropic`, `codex`, `opencode`, …) and resolves `\"provider/model\"` refs to them, so the agent loop and the CLI can switch backends by changing one string."
+  },
+  {
+    "path": "packages/ai/src/sse.ts",
+    "description": "Minimal `text/event-stream` parser. Shared by every adapter that speaks SSE (OpenAI-compatible, Anthropic). Handles chunk boundaries that split a line, CRLF vs LF, multi-line `data:` fields, `:` comments / keep-alives, and streams that end without the final blank line."
+  },
+  {
+    "path": "packages/ai/src/stream.ts",
+    "description": "The shared streaming call. Every provider adapter takes the same request, so this is the only place that fills in the defaults. The same loop works for every backend, which is the point of the provider layer."
+  },
+  {
+    "path": "packages/ai/src/testing/mock-providers.ts",
+    "description": "A local server that speaks two real provider wire formats. It exists so the registry can be exercised end to end — real HTTP, real SSE, real adapters — without an API key: one endpoint answers in OpenAI's `chat.completion.chunk` shape, the other in Anthropic's named-event shape. The point of the registry is that the *same* code drives both."
+  },
+  {
+    "path": "packages/ai/src/types.ts",
+    "description": "Unified provider types. Every adapter (OpenAI-compatible, Anthropic, Gemini, …) translates its wire format into these shapes, so nothing above this layer ever imports a vendor SDK. Everything here is plain JSON, which is what makes sessions saveable and replayable in Phase 6."
+  },
+  {
+    "path": "packages/ai/tsconfig.json",
+    "description": "Workspace TypeScript compiler settings and source inclusion."
+  },
+  {
+    "path": "packages/ai/vitest.config.ts",
+    "description": "Vitest configuration for deterministic workspace tests."
+  },
+  {
+    "path": "packages/cli/eslint.config.js",
+    "description": "Workspace lint configuration using shared repository presets."
+  },
+  {
+    "path": "packages/cli/package.json",
+    "description": "@cli-agent/cli: workspace manifest, dev, build, build:binary, demo:extensions, start, lint, check-types, test, and dependencies."
+  },
+  {
+    "path": "packages/cli/scripts/demo-extensions.ts",
+    "description": "Phase 8 demo: what the project adds to the agent. Builds a session in a directory that has an MCP server, a hook and an extension, and prints what the agent can now do: the tools, the commands, and what each of them is for."
+  },
+  {
+    "path": "packages/cli/scripts/drive.ts",
+    "description": "Drive the interactive session the way a person would: one key at a time, with a pause between them. Run: pnpm exec tsx scripts/drive.ts \"<keys>\" The keys: text is typed, \"<enter>\" presses Enter, \"<esc>\" presses Escape, \"<down>\" and \"<up>\" are the arrows."
+  },
+  {
+    "path": "packages/cli/scripts/terminal-smoke.ts",
+    "description": "Native PTY smoke fixture. No credentials, network requests, or session files."
+  },
+  {
+    "path": "packages/cli/scripts/ui-approval-probe.ts",
+    "description": "Render the permission dialog headless and dump what the user sees. Run: pnpm --filter @cli-agent/cli exec tsx scripts/ui-approval-probe.ts"
+  },
+  {
+    "path": "packages/cli/scripts/ui-model-probe.ts",
+    "description": "The model picker, with the OpenCode CLI of this machine behind it. The picker is opened, the list of the OpenCode CLI is waited for, and one of its models is taken. What the user would see is printed."
+  },
+  {
+    "path": "packages/cli/scripts/ui-opencode-probe.ts",
+    "description": "The real session, the real OpenCode CLI, the real terminal. The UI is rendered into a headless terminal, the question is typed into it, and what the user would see is printed. Nothing is stubbed: the OpenCode CLI on this machine answers."
+  },
+  {
+    "path": "packages/cli/scripts/ui-probe.ts",
+    "description": "Render the interactive UI headless and dump what the user sees. Run: pnpm --filter @cli-agent/cli exec tsx scripts/ui-probe.ts"
+  },
+  {
+    "path": "packages/cli/src/agents.ts",
+    "description": "Agents. An agent is a model, a prompt and a set of tools under a name. The main agent is the one you are talking to; the others are profiles you can switch to, and the ones a sub-agent can be given."
+  },
+  {
+    "path": "packages/cli/src/args.test.ts",
+    "description": "Regression tests for parseArgs, parseRuleArgument, isPermissionMode."
+  },
+  {
+    "path": "packages/cli/src/args.ts",
+    "description": "What the command line says. agent interactive agent -p \"do the thing\" print mode agent --json -p \"...\" the events as JSON lines agent --rpc JSON lines in, JSON lines out"
+  },
+  {
+    "path": "packages/cli/src/catalog.test.ts",
+    "description": "Regression tests for the catalogue, the default model."
+  },
+  {
+    "path": "packages/cli/src/catalog.ts",
+    "description": "Discover available models from authenticated providers, local CLI bridges, and extensions, retaining provider failures."
+  },
+  {
+    "path": "packages/cli/src/cli.ts",
+    "description": "Executable entry point: parse arguments, compose a session, and select interactive, print, JSON, or RPC output."
+  },
+  {
+    "path": "packages/cli/src/commands.test.ts",
+    "description": "Regression tests for print mode, json mode, rpc mode."
+  },
+  {
+    "path": "packages/cli/src/commands.ts",
+    "description": "The modes. All four read the same event stream; they only differ in what they do with it. The answer goes to stdout, so `agent -p \"...\" > answer.txt` works and the tool activity stays on stderr where it does not pollute the answer."
+  },
+  {
+    "path": "packages/cli/src/review.test.ts",
+    "description": "Regression tests for read-only code review."
+  },
+  {
+    "path": "packages/cli/src/review.ts",
+    "description": "Capture a read-only Git diff, fingerprint it, validate structured findings, and run a review without editing tools."
+  },
+  {
+    "path": "packages/cli/src/session-controller.test.ts",
+    "description": "Regression tests for session switching."
+  },
+  {
+    "path": "packages/cli/src/session-controller.ts",
+    "description": "Switch saved sessions and persist model preferences, model-change markers, workers, and reviews atomically."
+  },
+  {
+    "path": "packages/cli/src/session.test.ts",
+    "description": "Regression tests for the session."
+  },
+  {
+    "path": "packages/cli/src/session.ts",
+    "description": "The session the CLI works in. A provider from the ref, the tools behind the permissions, and the state the loop keeps — with the conversation written down as it happens, so it can be picked up again later."
+  },
+  {
+    "path": "packages/cli/src/ui/colors.ts",
+    "description": "Colors. Plain ANSI: no dependency, works everywhere a terminal does, and can be switched off (NO_COLOR, or a terminal that does not want them)."
+  },
+  {
+    "path": "packages/cli/src/ui/complete.test.ts",
+    "description": "Regression tests for completing a path, completing a file."
+  },
+  {
+    "path": "packages/cli/src/ui/complete.ts",
+    "description": "@-completion. Typing \"@src/li\" offers the files that start with it, so a file can be named without typing the whole path."
+  },
+  {
+    "path": "packages/cli/src/ui/components.ts",
+    "description": "Render the transcript, thinking previews, searchable selectors, and scrollable detail views."
+  },
+  {
+    "path": "packages/cli/src/ui/diff.ts",
+    "description": "Diffs, for the edits. When the model edits a file, the interesting part is what changed: the lines that go and the lines that come."
+  },
+  {
+    "path": "packages/cli/src/ui/frame.test.ts",
+    "description": "Regression tests for the box, the header, the welcome."
+  },
+  {
+    "path": "packages/cli/src/ui/frame.ts",
+    "description": "The frame of the session. The header says where the agent is. The welcome says what it can do. The field is where the answer goes, and the line under it says what is left."
+  },
+  {
+    "path": "packages/cli/src/ui/helpers.ts",
+    "description": "Defines knownModels, modelIdOf, summarise for ui consumers."
+  },
+  {
+    "path": "packages/cli/src/ui/input.test.ts",
+    "description": "Regression tests for slash commands, the shell escape, @-completion."
+  },
+  {
+    "path": "packages/cli/src/ui/interactive.test.ts",
+    "description": "Regression tests for the interactive session."
+  },
+  {
+    "path": "packages/cli/src/ui/interactive.ts",
+    "description": "Compose the pi-tui screen, focused dialogs, prompt queue, permissions, model selection, sessions, and worker controls."
+  },
+  {
+    "path": "packages/cli/src/ui/markdown.ts",
+    "description": "Markdown, for the terminal. A small renderer: headings, bold, italic, inline code, fenced code, lists and paragraphs. It is not CommonMark, but it is the part of it that a model's answer actually uses."
+  },
+  {
+    "path": "packages/cli/src/ui/picker.test.ts",
+    "description": "Regression tests for the model picker."
+  },
+  {
+    "path": "packages/cli/src/ui/picker.ts",
+    "description": "A list you can pick from. It is drawn under the prompt, and the keys that are not the picker's go to the line as usual: the list is a list, not a mode. The arrows move, Enter takes, Escape puts it away."
+  },
+  {
+    "path": "packages/cli/src/ui/screen.test.ts",
+    "description": "Regression tests for rendered terminal."
+  },
+  {
+    "path": "packages/cli/src/ui/slash.ts",
+    "description": "Slash commands, and the shell escape. A line that starts with \"/\" is a command for the agent, not a message for the model. A line that starts with \"!\" is a shell command."
+  },
+  {
+    "path": "packages/cli/src/ui/status.ts",
+    "description": "The tool blocks. A tool call is a line: what it was asked to do, and whether it worked. The line folds, so a long output does not fill the screen."
+  },
+  {
+    "path": "packages/cli/src/ui/store.test.ts",
+    "description": "Regression tests for transcript state."
+  },
+  {
+    "path": "packages/cli/src/ui/store.ts",
+    "description": "Accumulate display-only transcript blocks and update thinking and tool status in place by identity."
+  },
+  {
+    "path": "packages/cli/src/ui/terminal.ts",
+    "description": "Adapt native or injected input/output streams to the pi-tui terminal interface."
+  },
+  {
+    "path": "packages/cli/src/ui/ui.test.ts",
+    "description": "Regression tests for colors, markdown, the streaming markdown."
+  },
+  {
+    "path": "packages/cli/TERMINAL_UI.md",
+    "description": "`InteractiveUi` is the only interactive input owner. Pi's `TuiMainScreen`\r owns output, cursor movement, synchronized frames, resizing, and native\r"
+  },
+  {
+    "path": "packages/cli/THIRD_PARTY_NOTICES.md",
+    "description": "The interactive terminal uses `@earendil-works/pi-tui` 1.5.2 from https://github.com/earendil-works/pi, licensed under the MIT License."
+  },
+  {
+    "path": "packages/cli/tsconfig.json",
+    "description": "Workspace TypeScript compiler settings and source inclusion."
+  },
+  {
+    "path": "packages/cli/tsup.config.ts",
+    "description": "tsup.config.ts supports Terminal command and runtime composition. Build with `pnpm --filter @cli-agent/cli build`; see `TERMINAL_UI.md` for renderer boundaries.."
+  },
+  {
+    "path": "packages/cli/vitest.config.ts",
+    "description": "Vitest configuration for deterministic workspace tests."
+  },
+  {
+    "path": "packages/core/eslint.config.js",
+    "description": "Workspace lint configuration using shared repository presets."
+  },
+  {
+    "path": "packages/core/eval-report.json",
+    "description": "Shared eval report configuration preset."
+  },
+  {
+    "path": "packages/core/package.json",
+    "description": "@cli-agent/core: workspace manifest, dev, demo:loop, demo:consumers, demo:tools, demo:permissions, demo:prompt, demo:compact, demo:session, demo:agents, eval, lint, check-types, test, and dependencies."
+  },
+  {
+    "path": "packages/core/scripts/demo-agents.ts",
+    "description": "Phase 7 demo: the lead delegates to the workers. One prompt, a real model, a real worker: the lead is asked to find out what is in a directory, it hands the job to the explorer, and only the explorer's report comes back — not the files it read."
+  },
+  {
+    "path": "packages/core/scripts/demo-compact.ts",
+    "description": "Phase 5 demo: a long session that has to compact. A conversation that has grown past the model's window is summarised, and the agent carries on with the summary. The point is that it still knows what the task was."
+  },
+  {
+    "path": "packages/core/scripts/demo-consumers.ts",
+    "description": "Phase 2 demo: one event stream, three consumers. The loop yields events and prints nothing. A terminal reads them as text, a script reads them as JSON lines, and a parent agent reads the summary of a sub-agent — all from the same stream."
+  },
+  {
+    "path": "packages/core/scripts/demo-loop.ts",
+    "description": "Phase 2 demo: the loop with a real model and a fake echo tool. The model is asked to call the tool; the loop runs it, sends the result back, and the model answers. Everything printed here comes out of the loop's event stream — the loop itself never prints."
+  },
+  {
+    "path": "packages/core/scripts/demo-permissions.ts",
+    "description": "Phase 3 demo: the agent, the tools and the permissions. A small project with a failing test. The agent reads the test, fixes the code and runs the test again — with the permission layer in front of the tools, in \"ask\" mode: the commands are allowed by a rule, and anything else would be put to the user."
+  },
+  {
+    "path": "packages/core/scripts/demo-prompt.ts",
+    "description": "Phase 5 demo: the layered system prompt. Shows what the model is told on every turn, layer by layer, and which of the layers the provider can cache."
+  },
+  {
+    "path": "packages/core/scripts/demo-session.ts",
+    "description": "Phase 6 demo: quit in the middle, come back, carry on. The first session asks for a tool and is then closed. The second session opens the same file, reads the conversation back and continues it — the model sees what happened before it was interrupted."
+  },
+  {
+    "path": "packages/core/scripts/demo-tools.ts",
+    "description": "Phase 3 demo: a real model with real tools. The model is given a small project and asked to fix it. It reads the file, edits it, and checks its work — through the same loop, the same tools and the same event stream as everything else."
+  },
+  {
+    "path": "packages/core/scripts/eval.ts",
+    "description": "The eval suite, run against a real model. Each task is a small repository, a question, and a test. The report says how many passed, how many turns it took and what it cost."
+  },
+  {
+    "path": "packages/core/src/agents/board.test.ts",
+    "description": "Regression tests for the board."
+  },
+  {
+    "path": "packages/core/src/agents/board.ts",
+    "description": "The shared board. The workers of one task write to it, so the lead can see what is going on: which task, who owns it, what state it is in and what it found. It is a JSON file, so it survives a crash and can be read while the work is going on."
+  },
+  {
+    "path": "packages/core/src/agents/isolation.test.ts",
+    "description": "Regression tests for the isolation."
+  },
+  {
+    "path": "packages/core/src/agents/isolation.ts",
+    "description": "Isolation. A worker that only reads can share the workspace: it cannot change anything, so there is nothing to keep apart. A worker that writes gets a git worktree of its own, on a branch of its own, and the orchestrator merges the branch when it is happy with it."
+  },
+  {
+    "path": "packages/core/src/agents/multi-agent.test.ts",
+    "description": "Regression tests for one prompt, many agents."
+  },
+  {
+    "path": "packages/core/src/agents/orchestrator.test.ts",
+    "description": "Regression tests for the orchestrator, the pipeline, the generator and the critic."
+  },
+  {
+    "path": "packages/core/src/agents/orchestrator.ts",
+    "description": "Orchestration. Three patterns, all over the same worker:"
+  },
+  {
+    "path": "packages/core/src/agents/roles.test.ts",
+    "description": "Regression tests for an agent role, the roles."
+  },
+  {
+    "path": "packages/core/src/agents/roles.ts",
+    "description": "Agent roles. A role is a name, a model, a set of tools and a system prompt. It lives in a file:"
+  },
+  {
+    "path": "packages/core/src/agents/task-tool.test.ts",
+    "description": "Regression tests for the task tool."
+  },
+  {
+    "path": "packages/core/src/agents/task-tool.ts",
+    "description": "The task tool. The parent delegates to a worker: the worker gets its own system prompt, its own tools and its own model, and only the report it writes comes back. A worker can read fifty files; the parent sees three hundred words."
+  },
+  {
+    "path": "packages/core/src/agents/worker-manager.test.ts",
+    "description": "Regression tests for live workers."
+  },
+  {
+    "path": "packages/core/src/agents/worker-manager.ts",
+    "description": "Own worker lifetimes, concurrency, cancellation, follow-ups, transcripts, and observable status."
+  },
+  {
+    "path": "packages/core/src/budget.loop.test.ts",
+    "description": "Regression tests for the budget in the loop."
+  },
+  {
+    "path": "packages/core/src/budget.test.ts",
+    "description": "Regression tests for counting tokens, the budget."
+  },
+  {
+    "path": "packages/core/src/budget.ts",
+    "description": "The budget. How much of the model's context window the conversation may use, and when it has to be made smaller."
+  },
+  {
+    "path": "packages/core/src/checkpoints.test.ts",
+    "description": "Regression tests for the checkpoints."
+  },
+  {
+    "path": "packages/core/src/checkpoints.ts",
+    "description": "File checkpoints. Before a tool changes a file, the file is snapshotted, so the change can be undone. It is the same idea as a git stash, without needing a repository: the snapshot is the content of the file before the change."
+  },
+  {
+    "path": "packages/core/src/commands.test.ts",
+    "description": "Regression tests for the custom commands, what a command sends."
+  },
+  {
+    "path": "packages/core/src/commands.ts",
+    "description": "Custom commands. A command is a markdown file in `.myagent/commands`. The name of the file is the name of the command: `deploy.md` is `/deploy`. What the file says is what the model is asked, so a command is a prompt you do not have to type again."
+  },
+  {
+    "path": "packages/core/src/compact.test.ts",
+    "description": "Regression tests for compaction, the summary prompt."
+  },
+  {
+    "path": "packages/core/src/compact.ts",
+    "description": "Compaction. When the conversation no longer fits, the old part of it is summarised and replaced by the summary. What is kept is the summary and the last few messages, so the model still knows what just happened and still knows what it was asked to do."
+  },
+  {
+    "path": "packages/core/src/context.ts",
+    "description": "Context building. The system prompt is built in layers (see prompt.ts): the parts that do not change come first, so the provider can cache them, and the conversation follows as messages. Phase 5 replaces the message half with budgeting — trimming the transcript to the model's context window, summarising the middle, keeping the ends."
+  },
+  {
+    "path": "packages/core/src/environment.ts",
+    "description": "Where the agent is. The working directory, the branch it is on, the operating system and the date. It changes while the session runs, so it sits below the parts that do not: everything above it can be cached by the provider."
+  },
+  {
+    "path": "packages/core/src/evals/runner.test.ts",
+    "description": "Regression tests for the eval tasks, the eval suite."
+  },
+  {
+    "path": "packages/core/src/evals/runner.ts",
+    "description": "The eval runner. Every task runs in a throwaway repository: the files are written, the agent is asked the question, and a test is run in the repository afterwards. It passes when the test exits with zero."
+  },
+  {
+    "path": "packages/core/src/evals/tasks.ts",
+    "description": "The eval tasks. Each task is a small repository, a question, and a test that says whether the agent did it. The repository is thrown away afterwards, so the agent can do anything to it."
+  },
+  {
+    "path": "packages/core/src/extensions.test.ts",
+    "description": "Regression tests for an extension, a provider an extension added."
+  },
+  {
+    "path": "packages/core/src/extensions.ts",
+    "description": "Extensions. An extension is a TypeScript module in `.myagent/extensions` that exports a `register` function. It is given an API and adds what it likes: tools, commands and providers."
+  },
+  {
+    "path": "packages/core/src/hooks.loop.test.ts",
+    "description": "Regression tests for a hook in the loop."
+  },
+  {
+    "path": "packages/core/src/hooks.test.ts",
+    "description": "Regression tests for the hook config, which hooks answer, a hook that runs."
+  },
+  {
+    "path": "packages/core/src/hooks.ts",
+    "description": "Hooks. A hook is a shell command that runs when something happens. The command is given the details on its standard input, and what it does with them is up to it:"
+  },
+  {
+    "path": "packages/core/src/index.ts",
+    "description": "Public exports for this module boundary."
+  },
+  {
+    "path": "packages/core/src/logging.test.ts",
+    "description": "Regression tests for the log, what the loop writes down."
+  },
+  {
+    "path": "packages/core/src/logging.ts",
+    "description": "The log. Every request, every tool call and every usage is written down as one JSON object per line. The log is what the agent did, in order, in a shape a program can read: the sessions are for the conversation, the log is for the work."
+  },
+  {
+    "path": "packages/core/src/loop.guards.test.ts",
+    "description": "Regression tests for loop guards, abort, retry."
+  },
+  {
+    "path": "packages/core/src/loop.order.test.ts",
+    "description": "Regression tests for the tools of one turn."
+  },
+  {
+    "path": "packages/core/src/loop.signature.test.ts",
+    "description": "Regression tests for a signature on a call."
+  },
+  {
+    "path": "packages/core/src/loop.test-helpers.ts",
+    "description": "Test helpers: a provider that plays back scripted turns, and a fake echo tool. Shared by the loop tests."
+  },
+  {
+    "path": "packages/core/src/loop.test.ts",
+    "description": "Regression tests for the agent loop, accumulate, buildContext."
+  },
+  {
+    "path": "packages/core/src/loop.tool-limits.test.ts",
+    "description": "Regression tests for a tool that returns a lot, a tool that says its result must be kept."
+  },
+  {
+    "path": "packages/core/src/loop.ts",
+    "description": "The agent loop. model -> tool calls -> results -> model, until the model stops asking for tools. The loop yields events and never prints, so the CLI, a JSON mode and a sub-agent all consume the same stream."
+  },
+  {
+    "path": "packages/core/src/memory.ts",
+    "description": "Project memory. AGENTS.md and CLAUDE.md are how a project says what it wants. The search walks up from the working directory, so the memory of the directory you are in and of every directory above it is read; the user's own ~/.myagent/AGENTS.md is read too."
+  },
+  {
+    "path": "packages/core/src/prompt.test.ts",
+    "description": "Regression tests for the layers, the project memory, the environment."
+  },
+  {
+    "path": "packages/core/src/prompt.ts",
+    "description": "The layered system prompt. What the model sees on every turn is built in layers, and the order is the point: the parts that do not change come first, so the provider can cache them and only pay for the part that moved."
+  },
+  {
+    "path": "packages/core/src/redact.test.ts",
+    "description": "Regression tests for taking the secrets out, the secrets the process knows, taking the secrets out of anything."
+  },
+  {
+    "path": "packages/core/src/redact.ts",
+    "description": "Keeping the secrets out. Everything the agent reads goes into a log: the requests, the tool calls, the answers. A file it read may hold a key, and a log is a file that is written to disk and kept."
+  },
+  {
+    "path": "packages/core/src/ref.ts",
+    "description": "The \"provider/model\" ref. The ref is how a model is named in the command line and in the configuration: \"provider/model\". The provider is built from the part before the slash, and the model is called by the part after it."
+  },
+  {
+    "path": "packages/core/src/render.test.ts",
+    "description": "Regression tests for emit events, not prints, the text consumer, the JSON consumer."
+  },
+  {
+    "path": "packages/core/src/render.ts",
+    "description": "Consumers of the event stream. The loop never prints: it yields events, and every surface reads that one stream its own way. A terminal prints text, a script reads JSON lines, and a parent agent reads the summary of what a sub-agent did."
+  },
+  {
+    "path": "packages/core/src/repomap.test.ts",
+    "description": "Regression tests for the repo map."
+  },
+  {
+    "path": "packages/core/src/repomap.ts",
+    "description": "The repo map. An outline of what is in the project: the files, and the symbols in them. It is injected into the prompt so the model can find the right file without reading every file first — the agentic search (grep, glob, read) still does the finding, but the map tells it what exists."
+  },
+  {
+    "path": "packages/core/src/resume.test.ts",
+    "description": "Regression tests for quitting and resuming."
+  },
+  {
+    "path": "packages/core/src/retry.ts",
+    "description": "Retrying a provider call. A provider that answers 429 or 5xx is worth waiting for; a provider that answered with content and then dropped the connection is not, because the answer would be delivered twice. So a call is only retried when nothing came back yet, and never after a tool has run — the side effects of a tool cannot be undone by asking the model again."
+  },
+  {
+    "path": "packages/core/src/sample-repo.ts",
+    "description": "A small project with a failing test. The scenario the guide asks for: the agent reads the failing test, fixes the code and runs the test again. It is small on purpose — the point is that read, edit and bash work together, not that the bug is hard."
+  },
+  {
+    "path": "packages/core/src/scenario.test.ts",
+    "description": "Regression tests for the agent in a real project."
+  },
+  {
+    "path": "packages/core/src/session.test.ts",
+    "description": "Regression tests for a long session."
+  },
+  {
+    "path": "packages/core/src/sessions.test.ts",
+    "description": "Regression tests for the session store."
+  },
+  {
+    "path": "packages/core/src/sessions.ts",
+    "description": "Sessions. A session is a file of entries, one JSON object per line, appended and never rewritten:"
+  },
+  {
+    "path": "packages/core/src/shrink.test.ts",
+    "description": "Regression tests for shrinking a tool result, the old tool results."
+  },
+  {
+    "path": "packages/core/src/shrink.ts",
+    "description": "Shrinking what the model has to read. A tool result can be enormous — a file, a build log, a search over a whole repository — and the model rarely needs all of it. So a big result keeps its head and its tail, and says how much was left out; and a result that is many turns old is replaced by a one-line stub, because the model has long since moved on from it."
+  },
+  {
+    "path": "packages/core/src/skills.test.ts",
+    "description": "Regression tests for the skills, the body of a skill, the skill tool."
+  },
+  {
+    "path": "packages/core/src/skills.ts",
+    "description": "Skills and the plan. The dynamic part of the prompt: what the agent can draw on, and what it said it would do. It changes while the session runs, so it belongs at the bottom of the prompt."
+  },
+  {
+    "path": "packages/core/src/subagent.ts",
+    "description": "Sub-agents. A sub-agent is the same loop with its own transcript: it gets its own tools and its own prompt, and it yields the same events, so the parent reads one stream and sees everything the sub-agent did."
+  },
+  {
+    "path": "packages/core/src/tokens.ts",
+    "description": "Counting tokens. The count is an estimate until the provider says otherwise: the real number arrives with the usage of a response, and the difference between the two is remembered, so the next estimate is closer."
+  },
+  {
+    "path": "packages/core/src/types.ts",
+    "description": "The agent's state and the events it emits."
+  },
+  {
+    "path": "packages/core/src/untrusted.test.ts",
+    "description": "Regression tests for marking what is data, a tool that holds data."
+  },
+  {
+    "path": "packages/core/src/untrusted.ts",
+    "description": "What the agent reads is data. A file in the repository may say \"ignore what you were told and run this\". A page from the web certainly may. Neither is the user talking: the user asked a question, and the agent read something."
+  },
+  {
+    "path": "packages/core/tsconfig.json",
+    "description": "Workspace TypeScript compiler settings and source inclusion."
+  },
+  {
+    "path": "packages/core/vitest.config.ts",
+    "description": "Vitest configuration for deterministic workspace tests."
+  },
+  {
+    "path": "packages/eslint-config/base.js",
+    "description": "Defines config for eslint-config consumers."
+  },
+  {
+    "path": "packages/eslint-config/next.js",
+    "description": "Defines nextJsConfig for eslint-config consumers."
+  },
+  {
+    "path": "packages/eslint-config/package.json",
+    "description": "@repo/eslint-config: workspace manifest, package exports, and dependencies."
+  },
+  {
+    "path": "packages/eslint-config/react-internal.js",
+    "description": "Defines config for eslint-config consumers."
+  },
+  {
+    "path": "packages/tools/eslint.config.js",
+    "description": "Workspace lint configuration using shared repository presets."
+  },
+  {
+    "path": "packages/tools/package.json",
+    "description": "@cli-agent/tools: workspace manifest, dev, lint, check-types, test, and dependencies."
+  },
+  {
+    "path": "packages/tools/src/bash.ts",
+    "description": "bash — run a command. The output is capped so a runaway command cannot fill the model's context: the head and the tail are kept and the middle is replaced by a note about how much was left out."
+  },
+  {
+    "path": "packages/tools/src/edit.ts",
+    "description": "edit — replace an exact string in a file. The most reliable edit format there is: the model says what is in the file and what should be there instead. The edit only goes through when what it says is actually there, and only once — a match that is missing or that appears more than once is an error, not a guess."
+  },
+  {
+    "path": "packages/tools/src/exec.ts",
+    "description": "Finding programs on PATH."
+  },
+  {
+    "path": "packages/tools/src/files.test.ts",
+    "description": "Regression tests for read, write, edit."
+  },
+  {
+    "path": "packages/tools/src/fixtures/echo-server.mjs",
+    "description": "A small MCP server, for the tests. It says hello with two tools: one that echoes what it is given, and one that fails. It talks over stdio, which is how most MCP servers are run."
+  },
+  {
+    "path": "packages/tools/src/glob.ts",
+    "description": "glob — find the files whose names match a pattern. ripgrep lists the files when it is installed; otherwise the same list is built here, skipping what git ignores."
+  },
+  {
+    "path": "packages/tools/src/grep.ts",
+    "description": "grep — search the files for a pattern. ripgrep does the work when it is installed: it is fast, it skips what git ignores, and its output is exactly the shape we want. When it is not installed, the same search runs here instead, with the same rules about ignored files."
+  },
+  {
+    "path": "packages/tools/src/ignore.ts",
+    "description": ".gitignore rules. The search tools skip what git ignores, so a search does not wander into node_modules or a build directory. This is a practical subset of the format: patterns, directory patterns, anchoring and negation."
+  },
+  {
+    "path": "packages/tools/src/index.ts",
+    "description": "Public exports for this module boundary."
+  },
+  {
+    "path": "packages/tools/src/mcp.http.test.ts",
+    "description": "Regression tests for an MCP server over HTTP."
+  },
+  {
+    "path": "packages/tools/src/mcp.server.test.ts",
+    "description": "Regression tests for a real MCP server."
+  },
+  {
+    "path": "packages/tools/src/mcp.test.ts",
+    "description": "Regression tests for the MCP config, an MCP tool, the schema of an MCP tool."
+  },
+  {
+    "path": "packages/tools/src/mcp.ts",
+    "description": "The MCP client. The Model Context Protocol is how a program offers its tools to other programs. A server is a process (or a URL) that says \"here are my tools\", and the agent calls them like its own."
+  },
+  {
+    "path": "packages/tools/src/paths.ts",
+    "description": "Paths, as the tools see them. Every tool takes a path the way a person would write it: relative to the working directory, or absolute. The resolved path is what the tool touches, and it is what the error messages name."
+  },
+  {
+    "path": "packages/tools/src/permissions/controller.test.ts",
+    "description": "Regression tests for live permissions."
+  },
+  {
+    "path": "packages/tools/src/permissions/controller.ts",
+    "description": "Own live permission mode, literal session grants, pending approvals, policy changes, and cancellation."
+  },
+  {
+    "path": "packages/tools/src/permissions/decide.ts",
+    "description": "The decision: may this call happen? The order is the whole policy:"
+  },
+  {
+    "path": "packages/tools/src/permissions/index.ts",
+    "description": "Public exports for this module boundary."
+  },
+  {
+    "path": "packages/tools/src/permissions/permissions.test.ts",
+    "description": "Regression tests for parsing rules, matching rules, deciding."
+  },
+  {
+    "path": "packages/tools/src/permissions/rules.ts",
+    "description": "Rules: how they are written and how they are matched."
+  },
+  {
+    "path": "packages/tools/src/permissions/types.ts",
+    "description": "What the agent is allowed to do. The tools are powerful; the permissions are what keep them pointed. Four modes say how much is allowed without asking, and a list of rules says what is always allowed, always refused, or always worth a question."
+  },
+  {
+    "path": "packages/tools/src/permissions/wrap.test.ts",
+    "description": "Regression tests for the permission wrapper."
+  },
+  {
+    "path": "packages/tools/src/permissions/wrap.ts",
+    "description": "The tools, behind the permissions. Every tool that is wrapped is asked first. The answer is one of three: it runs, it is refused, or the user is asked. A refusal never reaches the tool: the model is told what happened, and carries on."
+  },
+  {
+    "path": "packages/tools/src/read.ts",
+    "description": "read — a file, with line numbers. The output looks like `cat -n`: every line is prefixed with its number, so the model can say \"line 42\" and mean it."
+  },
+  {
+    "path": "packages/tools/src/run.ts",
+    "description": "Running a program and collecting what it says."
+  },
+  {
+    "path": "packages/tools/src/todo.ts",
+    "description": "todo — the checklist the model keeps. The model rewrites the list when its plan changes, and reads it back when it needs to remember what is left. The list lives with the tool, so it lasts for the session."
+  },
+  {
+    "path": "packages/tools/src/tools.test.ts",
+    "description": "Regression tests for bash, grep, glob."
+  },
+  {
+    "path": "packages/tools/src/tools.ts",
+    "description": "The standard set of tools."
+  },
+  {
+    "path": "packages/tools/src/types.ts",
+    "description": "The tool contract. A tool is something the model may call. The description and the schema are what the provider advertises; `run` is the executable side, which Phase 3 fills in (read, write, edit, bash, grep, glob, todo)."
+  },
+  {
+    "path": "packages/tools/src/validate.test.ts",
+    "description": "Regression tests for validateArgs, toToolSpec."
+  },
+  {
+    "path": "packages/tools/src/validate.ts",
+    "description": "Validating a tool's arguments. The schema a tool declares is the schema its arguments are checked against: the model is told exactly what is expected, and what it sends is held to that. A tool with a broken schema is refused rather than run with whatever the model happened to send."
+  },
+  {
+    "path": "packages/tools/src/walk.ts",
+    "description": "Walking a directory, the way a search should. Git's ignored files are skipped, and so are the directories that are never worth searching: .git, node_modules and the usual build output."
+  },
+  {
+    "path": "packages/tools/src/write.ts",
+    "description": "write — create a file, or replace what is in it."
+  },
+  {
+    "path": "packages/tools/tsconfig.json",
+    "description": "Workspace TypeScript compiler settings and source inclusion."
+  },
+  {
+    "path": "packages/tools/vitest.config.ts",
+    "description": "Vitest configuration for deterministic workspace tests."
+  },
+  {
+    "path": "packages/typescript-config/base.json",
+    "description": "Shared base configuration preset."
+  },
+  {
+    "path": "packages/typescript-config/nextjs.json",
+    "description": "Shared nextjs configuration preset."
+  },
+  {
+    "path": "packages/typescript-config/node.json",
+    "description": "Shared node configuration preset."
+  },
+  {
+    "path": "packages/typescript-config/package.json",
+    "description": "@repo/typescript-config: workspace manifest, package exports, and dependencies."
+  },
+  {
+    "path": "packages/typescript-config/react-library.json",
+    "description": "Shared react library configuration preset."
+  },
+  {
+    "path": "pnpm-lock.yaml",
+    "description": "Resolved workspace dependency versions and integrity metadata for reproducible installs."
+  },
+  {
+    "path": "pnpm-workspace.yaml",
+    "description": "Declare apps and packages workspace globs and dependency build policies."
+  },
+  {
+    "path": "scripts/diag-compare.mjs",
+    "description": "Temporary diagnostic: compare the ways of driving the opencode CLI. A: machine background service, plain agent. B: machine background service, agent defined in config (no plugin). C: private server, guard plugin (what the provider does today). Delete when done."
+  },
+  {
+    "path": "scripts/diag-configagent.mjs",
+    "description": "diag-configagent.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-configagent2.mjs",
+    "description": "diag-configagent2.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-ollama.mjs",
+    "description": "diag-ollama.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-opencode.ts",
+    "description": "diag-opencode.ts supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-phases.mjs",
+    "description": "diag-phases.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-serverout.mjs",
+    "description": "diag-serverout.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/diag-timing.mjs",
+    "description": "diag-timing.mjs supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "scripts/document-repository.mjs",
+    "description": "Generate the source-file reference and refresh marked README file maps while preserving handwritten content."
+  },
+  {
+    "path": "scripts/verify-commits.ps1",
+    "description": "verify-commits.ps1 supports Repository maintenance: source documentation generation and commit-by-commit verification.."
+  },
+  {
+    "path": "turbo.json",
+    "description": "Turborepo task dependencies, source inputs, and cache outputs for this scope."
+  }
+]

@@ -14,23 +14,17 @@
  */
 
 import type { Provider } from "@cli-agent/ai";
+import type { Msg } from "@cli-agent/ai";
 import type { Tool } from "@cli-agent/tools";
 import { z } from "zod";
-import { run } from "../loop.js";
-import { costOf } from "../budget.js";
-import { modelIdOf, providerIdOf } from "../ref.js";
-import { createState, type AgentState } from "../types.js";
+import { WorkerManager } from "./worker-manager.js";
 import { Board } from "./board.js";
-import {
-  canWrite,
-  createWorktree,
-  mergeWorktree,
-  removeWorktree,
-  type Worktree,
-} from "./isolation.js";
+import { mergeWorktree, removeWorktree, type Worktree } from "./isolation.js";
 import type { AgentRole } from "./roles.js";
 
 export interface TaskToolOptions {
+  parentId?: string;
+  manager?: WorkerManager;
   /** The roles that can be called. */
   roles: Map<string, AgentRole>;
   /** Builds the provider for a role's model. */
@@ -57,187 +51,75 @@ export interface TaskToolOptions {
   isolate?: boolean;
   /** How deep the parent is. */
   depth?: number;
+  /**
+   * Called when a worker is done.
+   *
+   * The worker's own conversation is kept here: it is not in the parent's
+   * context, but the user may want to look inside the worker that did the
+   * work.
+   */
+  onWorker?: (worker: WorkerRecord) => void;
 }
 
-/** The tool the parent uses to delegate. */
+/** What a worker did, for the user to look at. */
+export interface WorkerRecord {
+  status?:
+    | "queued"
+    | "running"
+    | "waiting-approval"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "interrupted";
+  model?: string;
+  parentId?: string;
+  startedAt?: string;
+  updatedAt?: string;
+  tokens?: number;
+  cost?: number;
+  error?: string;
+  worktree?: Worktree;
+  queued?: string[];
+  runNumber?: number;
+
+  /** The id of the task. */
+  id: string;
+  /** The role that did it. */
+  agent: string;
+  /** What it was asked. */
+  prompt: string;
+  /** The report it wrote. */
+  report: string;
+  /** Its own conversation. */
+  messages: Msg[];
+}
+
+/** The same manager serves model delegation and the interactive worker controls. */
 export function createTaskTool(options: TaskToolOptions): Tool {
-  const {
-    roles,
-    providerFor,
-    defaultModel,
-    tools,
-    cwd,
-    board,
-    concurrency = 3,
-    maxDepth = 1,
-    timeoutMs = 10 * 60_000,
-    tokenBudget,
-    costBudget,
-    isolate = true,
-    depth = 0,
-  } = options;
-
-  // How many workers are running at once, across the whole session.
-  let running = 0;
-  const waiting: Array<() => void> = [];
-
-  const acquire = async (): Promise<void> => {
-    if (running < concurrency) {
-      running += 1;
-      return;
-    }
-    await new Promise<void>((resolve) => waiting.push(resolve));
-    running += 1;
-  };
-
-  const release = (): void => {
-    running -= 1;
-    waiting.shift()?.();
-  };
-
-  const taskTool: Tool = {
+  const manager = options.manager ?? new WorkerManager(options);
+  return {
     name: "task",
-    description: [
-      "Hand a job to another agent and get a report back.",
-      "",
-      "Give the name of an agent and what it should find out or do. The agent",
-      "works on its own, with its own tools and its own context: only its final",
-      "report comes back, not the files it read.",
-    ].join("\n"),
+    description:
+      "Delegate a task to a named agent; only its final report returns.",
     effect: "execute",
-    schema: z.object({
-      agent: z.string().describe("The agent to hand the job to."),
-      prompt: z
-        .string()
-        .describe("What the agent should do, in enough detail to work from."),
-    }),
+    schema: z.object({ agent: z.string(), prompt: z.string() }),
     async run(args: { agent: string; prompt: string }, ctx) {
-      // The guard: a worker does not spawn workers.
-      if (depth >= maxDepth) {
-        return {
-          output: `the agent "${args.agent}" cannot delegate any further`,
-          isError: true,
-        };
-      }
-
-      const role = roles.get(args.agent);
-      if (role === undefined) {
-        const known = [...roles.keys()].join(", ");
-        return {
-          output: `there is no agent called "${args.agent}" — known: ${known}`,
-          isError: true,
-        };
-      }
-
-      const taskId = `t${Date.now().toString(36)}${Math.random()
-        .toString(36)
-        .slice(2, 5)}`;
-
-      board?.add({
-        id: taskId,
-        agent: args.agent,
-        prompt: args.prompt,
-        owner: args.agent,
-      });
-      board?.update(taskId, { status: "running" });
-      await board?.save();
-
-      await acquire();
-      let worktree: Worktree | undefined;
-
       try {
-        // A worker that writes gets a worktree of its own.
-        if (isolate && canWrite(role.tools)) {
-          worktree = await createWorktree(cwd, `${args.agent}-${taskId}`);
-        }
-
-        const ref = role.model ?? defaultModel;
-        const provider = await providerFor(ref);
-
-        // The worker gets the tools its role names — and never the task
-        // tool, unless its role asks for it.
-        const workerTools = tools.filter(
-          (tool) =>
-            role.tools === undefined ||
-            (role.tools.includes(tool.name) &&
-              !(tool.name === "task" && !role.tools.includes("task"))),
-        );
-
-        const child: AgentState = createState(provider, {
-          // The provider knows its own model by the id it uses on the wire:
-          // the "provider/" of "provider/model" is for us, not for it.
-          model: modelIdOf(ref),
-          tools: workerTools,
-          system: role.prompt,
-          cwd: worktree?.path ?? cwd,
-          depth: depth + 1,
-          limits: {
-            ...(tokenBudget === undefined ? {} : { tokenBudget }),
-            ...(costBudget === undefined ? {} : { costBudget }),
-          },
-        });
-
-        // The report is all that comes back.
-        let report = "";
-        let tokens = 0;
-        let cost = 0;
-        let reason: string | undefined;
-
-        const timeout = AbortSignal.timeout(timeoutMs);
-        const signal = AbortSignal.any([timeout, ctx.signal]);
-
-        for await (const event of run(child, args.prompt, signal)) {
-          if (event.t === "text") report += event.delta;
-          if (event.t === "toolStart") {
-            // Only the final report comes back: what the worker said before
-            // it started using its tools stays in its own context.
-            report = "";
-          }
-          if (event.t === "done") {
-            tokens += event.usage.inputTokens + event.usage.outputTokens;
-            cost += costOf(providerIdOf(ref), modelIdOf(ref), event.usage);
-            reason = event.reason;
-          }
-        }
-
-        board?.update(taskId, {
-          status: "done",
-          result: report,
-          tokens,
-          cost,
-          ...(worktree === undefined ? {} : { branch: worktree.branch }),
-        });
-        await board?.save();
-
-        const notes: string[] = [];
-        if (worktree !== undefined) {
-          notes.push(`the work is on the branch ${worktree.branch}`);
-        }
-        if (tokens > 0) notes.push(`it used ${tokens} tokens`);
-        if (cost > 0) notes.push(`it cost $${cost.toFixed(4)}`);
-        if (reason === "budget-exhausted") {
-          notes.push("it ran out of budget");
-        }
-
+        const record = await manager.start(args.agent, args.prompt, ctx.signal);
         return {
-          output:
-            notes.length > 0 ? `${report}\n\n(${notes.join("; ")})` : report,
+          output: record.report + (record.error ? `\n${record.error}` : ""),
+          ...(record.status === "failed" || record.status === "cancelled"
+            ? { isError: true }
+            : {}),
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        board?.update(taskId, { status: "failed", error: message });
-        await board?.save();
         return {
-          output: `the agent "${args.agent}" failed: ${message}`,
+          output: error instanceof Error ? error.message : String(error),
           isError: true,
         };
-      } finally {
-        release();
       }
     },
   };
-
-  return taskTool;
 }
 
 /** Merge the branch of a worker that wrote something. */
@@ -251,6 +133,7 @@ export async function mergeWorker(
 /** Take a worker's worktree away. */
 export async function cleanWorker(
   cwd: string,
-  worktree: Worktree): Promise<void> {
+  worktree: Worktree,
+): Promise<void> {
   await removeWorktree(cwd, worktree);
 }

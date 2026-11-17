@@ -1,0 +1,59 @@
+The runtime is a TypeScript monorepo with four functional packages. A separate Next.js application provides this landing page and guide. The core never prints; consumers choose how to render its async event stream.
+
+## Technology stack
+
+| Layer         | Technologies                          | Responsibility                            |
+| ------------- | ------------------------------------- | ----------------------------------------- |
+| Workspace     | pnpm, Turborepo                       | Dependencies and task graph               |
+| Language      | TypeScript, ESM                       | Typed contracts and modules               |
+| Model I/O     | Fetch, SSE, provider adapters         | Translate vendor protocols                |
+| Agent runtime | Async generators, AbortSignal         | Stream work and cancel it                 |
+| Tools         | Zod, MCP SDK, Node APIs               | Validate and execute capabilities         |
+| Context       | js-tiktoken, model metadata           | Estimate budgets and compact history      |
+| Terminal      | pi-tui                                | Differential rendering and keyboard input |
+| CLI build     | tsup; optional Bun                    | Node bundle and native executable         |
+| Verification  | Vitest, headless xterm, eval fixtures | Protocol, runtime, and screen regressions |
+| Website       | Next.js App Router, React, MDX        | Static guides and interactive examples    |
+| Documentation | Shiki, Mermaid, Playwright            | Code rendering, diagrams, browser checks  |
+
+Exact versions live in package manifests and `pnpm-lock.yaml`. The CLI requires Node 24+. The website currently uses Next.js 16 and React 19; the terminal is not a React application.
+
+## Package boundaries
+
+<Diagram
+  name="architecture"
+  title="Package dependencies and external boundaries"
+/>
+
+`packages/ai` owns provider contracts and credentials. It knows nothing about terminal layout. `packages/tools` defines capabilities and enforcement. `packages/core` owns the conversation and execution loop. `packages/cli` composes the runtime and supplies interactive, print, JSON, and RPC consumers.
+
+`apps/web` documents those packages but does not import or run the agent in visitors' browsers. It uses a generated source index to explain the checkout.
+
+## How the system is assembled
+
+1. `cli.ts` parses startup options and selects the consumer.
+2. `session.ts` builds providers, tools, permission control, extensions, journal, and workers.
+3. `createState` establishes the conversation state and limits.
+4. `run` accepts a prompt and yields runtime events.
+5. A consumer renders events without changing provider protocol code.
+6. Journal and UI sidecars persist the durable parts independently.
+
+This is an implementation walkthrough, not a claim about the historical order of commits.
+
+## Shared contracts
+
+`packages/ai/src/types.ts` defines messages, tool specs, usage, blocks, and provider events. An assistant message may contain text, signed thinking, and tool calls. Tool results reference call IDs. Preserving that relationship matters when replaying context to strict providers.
+
+`packages/core/src/types.ts` adds runtime state and lifecycle events. `packages/tools/src/types.ts` describes executable tools and their effects. These interfaces are the seams for adding another provider, tool, or consumer.
+
+## Cancellation and failures
+
+Long operations receive an AbortSignal. Cancellation propagates to model requests, tool execution, and worker lifetimes. Errors retain useful provider or tool context. Retries are bounded and should not replay a partially emitted answer as if it were a new one.
+
+Permission rules, budgets, repeated-call guards, and timeouts constrain work. They are complementary application controls, not a substitute for operating-system isolation.
+
+## Where to read next
+
+The [decision guide](/docs/decisions) compares alternative languages, terminal libraries, persistence, and web stacks. [Infrastructure](/docs/infrastructure) explains hosting and isolation choices. [Performance](/docs/performance) separates implemented optimizations, measurements, and open questions.
+
+Trace [the agent loop](/docs/agent-loop), inspect [the terminal UI](/docs/terminal-ui), or search [every source file](/docs/repository). Package and folder READMEs provide local maps when browsing the checkout.

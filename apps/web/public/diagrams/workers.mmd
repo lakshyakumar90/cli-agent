@@ -1,0 +1,13 @@
+flowchart TD
+  REQUEST[Parent task or UI request] --> ROLE[Resolve role and tools]
+  ROLE --> QUEUE[WorkerManager queue]
+  QUEUE --> SLOT[Wait for concurrency slot]
+  SLOT --> ISOLATE{Writing role?}
+  ISOLATE -->|Yes| TREE[Create isolated worktree]
+  ISOLATE -->|No| SHARED[Use shared workspace]
+  TREE --> RUN[Run bounded agent loop]
+  SHARED --> RUN
+  RUN --> POLICY[Shared live permissions]
+  POLICY --> END[Complete, fail, or cancel]
+  END --> RECORD[Save transcript and status]
+  RECORD --> REPORT[Return bounded parent report]

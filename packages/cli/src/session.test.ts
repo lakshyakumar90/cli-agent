@@ -121,6 +121,33 @@ describe("the session", () => {
     expect(names).toContain("read");
   });
 
+  it("keeps one provider per id, and closes it when the session ends", async () => {
+    let closed = 0;
+    const counted: Provider = {
+      ...provider,
+      close: async () => {
+        closed += 1;
+      },
+    };
+    const providers = new Map<string, Provider>([["test", counted]]);
+
+    const session = await createSession({
+      model: "test/model",
+      cwd: directory,
+      permissionMode: "yolo",
+      provider: counted,
+      providers,
+    });
+
+    // The provider of the session is asked for again, and it is the same
+    // one: a provider that owns a process is not built twice.
+    expect(await session.providerFor("test/other")).toBe(counted);
+    expect(session.providers.size).toBe(1);
+
+    await session.close();
+    expect(closed).toBe(1);
+  });
+
   it("opens without credentials, and says what is missing", async () => {
     const session = await createSession({
       model: "nothing/model",

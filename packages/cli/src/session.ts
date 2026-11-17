@@ -17,6 +17,7 @@ import {
 import {
   createTools,
   withPermissions,
+  PermissionController,
   type AskPermission,
   type PermissionRule,
   type Tool,
@@ -26,6 +27,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   CheckpointStore,
+  buildContext,
   createState,
   createSkillTool,
   findSkills,
@@ -44,14 +46,14 @@ import {
   type AgentRole,
   type Command,
   type Skill,
+  type WorkerRecord,
+  WorkerManager,
 } from "@cli-agent/core";
-import {
-  loadMcpTools,
-  readMcpConfig,
-  type McpTools,
-} from "@cli-agent/tools";
+import { loadMcpTools, readMcpConfig, type McpTools } from "@cli-agent/tools";
+import { SessionController } from "./session-controller.js";
 
 export interface SessionOptions {
+  restoreModel?: boolean;
   /** The "provider/model" ref. */
   model: string;
   /** The directory the agent works in. */
@@ -64,6 +66,14 @@ export interface SessionOptions {
   ask?: AskPermission;
   /** The provider, when it is already built (tests). */
   provider?: Provider;
+  /**
+   * The providers of this session, by id.
+   *
+   * They are built once and kept: a provider that owns a process — the
+   * OpenCode CLI drives one — would otherwise start a new one every time it
+   * is asked for.
+   */
+  providers?: Map<string, Provider>;
   /** Where the credentials come from. */
   factory?: ProviderFactoryOptions;
   /** Where the sessions are written. */
@@ -97,8 +107,20 @@ export interface SessionOptions {
 }
 
 export interface Session {
+  permissions: PermissionController;
+  workerManager: WorkerManager;
+  controller: SessionController;
   /** The provider. */
   provider: Provider;
+  /** The providers of this session, by id. */
+  providers: Map<string, Provider>;
+  /**
+   * The provider behind a "provider/model" ref.
+   *
+   * It is built once and kept, so a provider that owns a process does not
+   * start a new one for every turn.
+   */
+  providerFor(ref: string): Promise<Provider>;
   /** The tools, behind the permissions. */
   tools: Tool[];
   /** The state the loop keeps. */
@@ -119,6 +141,12 @@ export interface Session {
   commands: Command[];
   /** What the extensions added. */
   extensions: LoadedExtensions;
+  /**
+   * The workers that have run, and what they did.
+   *
+   * The user may look inside one of them.
+   */
+  workers: Map<string, WorkerRecord>;
   /**
    * What is missing, when something is.
    *
@@ -174,12 +202,7 @@ async function openLog(
 
   const path =
     options.log ??
-    join(
-      homedir(),
-      ".myagent",
-      "logs",
-      `${sessionId ?? "session"}.jsonl`,
-    );
+    join(homedir(), ".myagent", "logs", `${sessionId ?? "session"}.jsonl`);
 
   try {
     await mkdir(dirname(path), { recursive: true });
@@ -191,9 +214,7 @@ async function openLog(
 }
 
 /** Build the session. */
-export async function createSession(
-  options: SessionOptions,
-): Promise<Session> {
+export async function createSession(options: SessionOptions): Promise<Session> {
   const providerId = providerIdOf(options.model);
   const model = modelIdOf(options.model);
 
@@ -209,6 +230,21 @@ export async function createSession(
     providers: extensions.providers,
   };
 
+  // One provider per id, for the whole session: a provider that owns a
+  // process is asked for it once.
+  const providers = options.providers ?? new Map<string, Provider>();
+  const providerFor = async (ref: string): Promise<Provider> => {
+    const id = providerIdOf(ref);
+    const existing = providers.get(id);
+    if (existing !== undefined) return existing;
+    const made = await createProvider(id, factory);
+    providers.set(id, made);
+    // A provider that owns a process starts it now, so that the wait is
+    // over by the time the first question is asked.
+    made.warm?.();
+    return made;
+  };
+
   // The provider. When there is no credential the session still opens:
   // the first request says what is missing.
   let provider = options.provider;
@@ -216,7 +252,7 @@ export async function createSession(
 
   if (provider === undefined) {
     try {
-      provider = await createProvider(providerId, factory);
+      provider = await providerFor(options.model);
     } catch (error) {
       // A missing credential, or a provider nobody knows: neither is a
       // reason to close the door. The session opens and says what is
@@ -228,19 +264,34 @@ export async function createSession(
       };
       provider = missingProvider(providerId, missing.message);
     }
+  } else {
+    providers.set(providerId, provider);
+    // The provider was handed to us: it is warmed here too, so a provider
+    // that owns a process is ready before the first question.
+    provider.warm?.();
   }
 
   // The tools of the MCP servers, if there are any.
-  const mcp = options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
+  const mcp =
+    options.mcp ?? (await loadMcpTools(await readMcpConfig(options.cwd)));
 
   // Everything the model may call, behind the permissions: our own tools,
   // the tools of the extensions and the tools of the MCP servers. A tool
   // nobody knows is treated as one that changes things, which is the
   // careful answer.
+  const permissions = new PermissionController(
+    {
+      mode: options.permissionMode,
+      rules: options.rules ?? [],
+      workspace: options.cwd,
+    },
+    options.ask,
+  );
   const tools = withPermissions(
     [...createTools(), ...extensions.tools, ...mcp.tools],
     {
       mode: options.permissionMode,
+      controller: permissions,
       rules: options.rules ?? [],
       workspace: options.cwd,
       ...(options.ask === undefined ? {} : { ask: options.ask }),
@@ -260,7 +311,7 @@ export async function createSession(
     sessionId = (await store.open()) ?? undefined;
   }
   if (sessionId === undefined) {
-    sessionId = await store.create({ model });
+    sessionId = await store.create({ model: options.model });
   }
 
   const messages = await store.transcript(sessionId);
@@ -271,20 +322,26 @@ export async function createSession(
   await board.load();
 
   // The task tool: how the agent delegates.
-  const task = createTaskTool({
+  const workers = new Map<string, WorkerRecord>();
+  const workerManager = new WorkerManager({
+    parentId: store.id,
     roles,
-    providerFor: async (workerModel) =>
-      createProvider(providerIdOf(workerModel), factory),
+    providerFor,
     defaultModel: options.model,
     tools,
     cwd: options.cwd,
     board,
+    onWorker: (worker) => workers.set(worker.id, worker),
     ...(options.workerTokenBudget === undefined
       ? {}
       : { tokenBudget: options.workerTokenBudget }),
     ...(options.workerCostBudget === undefined
       ? {}
       : { costBudget: options.workerCostBudget }),
+  });
+  const task = createTaskTool({
+    ...workerManager.options,
+    manager: workerManager,
   });
 
   // The skills: only their names and descriptions go into the prompt, and
@@ -309,7 +366,14 @@ export async function createSession(
 
   const state = createState(provider, {
     model,
-    tools: [...tools, task, skill],
+    tools: [
+      ...tools,
+      ...withPermissions([task, skill], {
+        mode: permissions.mode,
+        controller: permissions,
+        workspace: options.cwd,
+      }),
+    ],
     messages,
     cwd: options.cwd,
     journal: store,
@@ -319,27 +383,90 @@ export async function createSession(
     log,
   });
 
+  const controller = new SessionController({
+    state,
+    store,
+    permissions,
+    workerManager,
+    model: options.model,
+    providerFor,
+    onSwitch: async (id) => {
+      state.log = await openLog(options, id);
+    },
+  });
+
+  // The context is built before the first question, and the map of the
+  // project is the slow part of it: it reads every file of the project.
+  // It is built now, while the user is still typing, so that the first
+  // question does not wait for it.
+  void buildContext(state).catch(() => undefined);
+
+  if (
+    options.restoreModel !== false &&
+    (options.continueLast || options.resume)
+  ) {
+    const saved = await store.metadata();
+    if (saved?.model) {
+      const ref = saved.model.includes("/")
+        ? saved.model
+        : `${providerId}/${saved.model}`;
+      try {
+        await controller.setModel(
+          ref,
+          ref === options.model ? provider : undefined,
+          state.reasoningEffort,
+        );
+      } catch (error) {
+        missing = {
+          provider: providerIdOf(ref),
+          message: `Saved model unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        };
+        await controller.setModel(
+          ref,
+          missingProvider(providerIdOf(ref), missing.message),
+        );
+      }
+    }
+  }
+
+  await controller.restore();
+
   return {
-    provider,
+    permissions,
+    workerManager,
+    controller,
+    get provider() {
+      return state.provider;
+    },
+    providers,
+    providerFor,
     tools: state.tools,
     state,
     store,
-    sessionId,
+    get sessionId() {
+      return store.id;
+    },
     roles,
     board,
     skills,
     mcp,
     commands,
     extensions,
+    workers: workerManager.records,
     ...(missing === undefined ? {} : { missing }),
     async close() {
+      await workerManager.stopAll();
+      await controller.save();
       // The servers are processes: they have to be stopped, or the agent
       // never finishes.
       await Promise.all(
-        mcp.servers.map((server) =>
-          server.close().catch(() => undefined),
-        ),
+        mcp.servers.map((server) => server.close().catch(() => undefined)),
       );
+      // The providers of this session go last: one of them may own a
+      // process of its own.
+      for (const made of providers.values()) {
+        await made.close?.().catch(() => undefined);
+      }
     },
   };
 }

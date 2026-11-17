@@ -1,0 +1,14 @@
+flowchart TD
+  U[Developer] --> CLI[packages/cli]
+  CLI --> CORE[packages/core]
+  CLI --> TOOLS[packages/tools]
+  CLI --> AI[packages/ai]
+  CORE --> TOOLS
+  CORE --> AI
+  TOOLS --> AI
+  AI --> MODEL[Model providers]
+  TOOLS --> LOCAL[Local files and shell]
+  TOOLS --> MCP[MCP services]
+  CORE --> JOURNAL[Session journal]
+  WEB[apps/web] -. documents .-> CLI
+  WEB -. documents .-> CORE

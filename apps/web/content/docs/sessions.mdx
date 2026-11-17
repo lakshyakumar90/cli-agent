@@ -1,0 +1,36 @@
+Sessions preserve the conversation as it happens. The journal is separate from terminal display state, so opening a picker or detail view does not add a model message.
+
+## Resume and name
+
+```bash
+agent --continue
+agent --resume session-id
+```
+
+In the UI, `/resume` opens a picker and `/rename` sets a title. `/new` and `/clear` create a new saved conversation without erasing the previous journal.
+
+## Storage model
+
+<Diagram name="sessions" title="Session journal and display metadata" />
+
+`SessionStore` writes JSONL entries with IDs and parent pointers under `~/.myagent/sessions/<project-hash>/`. The working directory scopes the storage. A fork references inherited history without copying the whole parent journal.
+
+Metadata and versioned `.ui` sidecars are written atomically. UI metadata keeps worker records, reviews, reasoning preferences, and model-change markers. It is not sent as a provider message. Runs interrupted by process exit restore as interrupted or cancelled, not silently restarted.
+
+## Branch a conversation
+
+`/fork` branches from a prior entry. `/tree` shows relationships. A conversation branch does not automatically create a Git branch for the parent workspace. Worker worktrees are a separate feature.
+
+## Switch safely
+
+`SessionController` resolves destination messages and provider before replacing state. It changes the journal, transcript, model, checkpoints, workers, and reviews together. Active work must stop before switching; approval grants are cleared.
+
+## Inspect and compact
+
+Ctrl+O opens the complete display transcript. Alt+I or `/inspect` opens the latest tool/thinking detail. Thinking previews show up to six rendered lines; inspection retains the full supplied text.
+
+`/compact` summarizes older context. Token estimation and tool-output shrinking help fit a model's window. The journal remains the audit trail; a provider does not remember content omitted from its next request. Model changes reset model-specific token calibration.
+
+## Recover from interruption
+
+Restart and resume the saved session. Inspect interrupted workers with `/tasks` before resuming them. Check the working tree before replaying writes or commands: changes may have occurred before cancellation completed.

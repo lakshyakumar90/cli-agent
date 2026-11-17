@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Event, ModelInfo, Provider, StreamRequest } from "@cli-agent/ai";
 import { createState, type AgentState } from "@cli-agent/core";
 import { InteractiveUi } from "./interactive.js";
@@ -113,9 +113,11 @@ describe("the interactive session", () => {
     });
 
     const running = ui.run();
-    input.write("hello\n");
-    await wait(500);
-    input.write("/exit\n");
+    input.write("hello\r");
+    await vi.waitFor(() => expect(out.text).toContain("hello there"), {
+      timeout: 10000,
+    });
+    input.write("/exit\r");
 
     expect(await running).toBe(0);
     expect(out.text).toContain("hello there");
@@ -138,11 +140,15 @@ describe("the interactive session", () => {
     });
 
     const running = ui.run();
-    input.write("hello\n");
-    await wait(150);
+    input.write("hello\r");
+    await vi.waitFor(() => expect(out.text).toContain("thinking about it"), {
+      timeout: 10000,
+    });
     input.write("\x1b"); // Esc
-    await wait(500);
-    input.write("/exit\n");
+    await vi.waitFor(() => expect(out.text).toContain("interrupted"), {
+      timeout: 10000,
+    });
+    input.write("/exit\r");
 
     await running;
 
@@ -169,7 +175,7 @@ describe("the interactive session", () => {
     await wait(100);
     input.write("\x1b[Z"); // Shift+Tab
     await wait(100);
-    input.write("/exit\n");
+    input.write("/exit\r");
 
     await running;
 
@@ -219,9 +225,11 @@ describe("the interactive session", () => {
     });
 
     const running = ui.run();
-    input.write("/deploy staging\n");
-    await wait(500);
-    input.write("/exit\n");
+    input.write("/deploy staging\r");
+    await vi.waitFor(() => expect(out.text).toContain("deployed"), {
+      timeout: 10000,
+    });
+    input.write("/exit\r");
 
     await running;
 
@@ -256,9 +264,11 @@ describe("the interactive session", () => {
     });
 
     const running = ui.run();
-    input.write("/help\n");
+    input.write("/help\r");
     await wait(300);
-    input.write("/exit\n");
+    input.write("\x1b");
+    await wait(100);
+    input.write("/exit\r");
 
     await running;
 
@@ -267,5 +277,3 @@ describe("the interactive session", () => {
     expect(out.text).toContain("Deploy the app");
   });
 });
-
-

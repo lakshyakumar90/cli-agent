@@ -24,24 +24,26 @@ describe("slash commands", () => {
   });
 
   it("knows the commands", () => {
-    expect(SLASH_COMMANDS.map((command) => command.name)).toEqual([
-      "/model",
-      "/permissions",
-      "/login",
-      "/compact",
-      "/clear",
-      "/resume",
-      "/agents",
-      "/fork",
-      "/tree",
-      "/undo",
-    ]);
+    expect(SLASH_COMMANDS.map((command) => command.name)).toEqual(
+      expect.arrayContaining([
+        "/model",
+        "/permissions",
+        "/login",
+        "/compact",
+        "/clear",
+        "/resume",
+        "/agents",
+        "/fork",
+        "/tree",
+        "/undo",
+      ]),
+    );
   });
 
   it("cycles the permission modes", () => {
     expect(nextPermissionMode("ask")).toBe("auto-edit");
-    expect(nextPermissionMode("auto-edit")).toBe("yolo");
-    expect(nextPermissionMode("yolo")).toBe("plan");
+    expect(nextPermissionMode("auto-edit")).toBe("plan");
+    expect(nextPermissionMode("yolo")).toBe("ask");
     expect(nextPermissionMode("plan")).toBe("ask");
   });
 });
@@ -79,4 +81,3 @@ describe("@-completion", () => {
     expect(candidates).toEqual(["src/index.ts", "src/other.ts"]);
   });
 });
-

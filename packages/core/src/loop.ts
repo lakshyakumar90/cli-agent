@@ -16,21 +16,10 @@
  * are real and the model must not be asked again.
  */
 
-import type {
-  Event,
-  Msg,
-  StopReason,
-  ToolCall,
-  Usage,
-} from "@cli-agent/ai";
+import type { Event, Msg, StopReason, ToolCall, Usage } from "@cli-agent/ai";
 import { resolvePath, validateArgs, type Tool } from "@cli-agent/tools";
 import { buildContext, type Context } from "./context.js";
-import {
-  budgetFor,
-  costOf,
-  estimateRequest,
-  shouldCompact,
-} from "./budget.js";
+import { budgetFor, costOf, estimateRequest, shouldCompact } from "./budget.js";
 import { compactMessages } from "./compact.js";
 import { correctRatio } from "./tokens.js";
 import { isAbort, isRetryNotice, withRetry } from "./retry.js";
@@ -129,10 +118,7 @@ export async function* run(
       yield* finish("max-turns");
       return;
     }
-    if (
-      limits.tokenBudget !== undefined &&
-      tokensUsed >= limits.tokenBudget
-    ) {
+    if (limits.tokenBudget !== undefined && tokensUsed >= limits.tokenBudget) {
       yield* finish("budget-exhausted");
       return;
     }
@@ -207,8 +193,16 @@ export async function* run(
     let aborted = false;
 
     try {
+      signal.throwIfAborted();
       const events = withRetry(
-        () => state.provider.stream({ ...ctx, signal }),
+        () =>
+          state.provider.stream({
+            ...ctx,
+            ...(state.reasoningEffort
+              ? { reasoningEffort: state.reasoningEffort }
+              : {}),
+            signal,
+          }),
         {
           maxRetries: limits.maxRetries,
           baseDelayMs: limits.retryDelayMs,
@@ -548,8 +542,7 @@ export async function execTool(
       callId: call.id,
       // What the tool holds is data, not instructions: a file may say what
       // to do, and it is not the user talking.
-      content:
-        tool.content === "untrusted" ? frameUntrusted(content) : content,
+      content: tool.content === "untrusted" ? frameUntrusted(content) : content,
       ...(result.isError === true ? { isError: true } : {}),
       ...(result.keep === true ? { keep: true } : {}),
     };
@@ -647,7 +640,7 @@ async function journal(
   try {
     await journal.append(msg, {
       ...(options.compacted === true ? { compacted: true } : {}),
-      model: state.model,
+      model: `${state.provider.id}/${state.model}`,
     });
   } catch {
     // A session that cannot be written must not stop the agent.
@@ -674,7 +667,3 @@ function callSignature(call: ToolCall): string {
   }
   return `${call.name}:${args}`;
 }
-
-
-
-

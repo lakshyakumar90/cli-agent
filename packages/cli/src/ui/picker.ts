@@ -9,16 +9,21 @@
  * never left with half a list on it.
  */
 
-import { bold, cyan, dim, green } from "./colors.js";
+import { bold, cyan, dim, green, highlight } from "./colors.js";
+import { box } from "./frame.js";
 
 /** One thing to pick. */
 export interface PickerItem {
   /** What is shown. */
   label: string;
+  /** What it means, when there is something to say. */
+  description?: string;
   /** What it means. */
   value: string;
   /** The heading it sits under. */
   group?: string;
+  /** It is the one in use. */
+  current?: boolean;
 }
 
 /** How many lines of the list are shown at once. */
@@ -27,8 +32,14 @@ export const VISIBLE = 12;
 export interface PickerOptions {
   /** Where the list is drawn. */
   out: NodeJS.WritableStream;
-  /** The heading above the list. */
+  /** The heading of the box, when there is a box. */
   title?: string;
+  /** The line under the list. */
+  hint?: string;
+  /** The list is in a box. */
+  boxed?: boolean;
+  /** The items are numbered. */
+  numbered?: boolean;
 }
 
 export class Picker {
@@ -65,8 +76,9 @@ export class Picker {
   /**
    * Narrow the list down to what has been typed.
    *
-   * The name, the value and the group are all looked at, so "gem" finds a
-   * model called "gemini" and a provider called "gemini" too.
+   * The name, the value, the description and the group are all looked at,
+   * so "gem" finds a model called "gemini" and a provider called "gemini"
+   * too.
    */
   narrow(filter: string): void {
     const typed = filter.trim().toLowerCase();
@@ -78,6 +90,7 @@ export class Picker {
             (item) =>
               item.label.toLowerCase().includes(typed) ||
               item.value.toLowerCase().includes(typed) ||
+              (item.description ?? "").toLowerCase().includes(typed) ||
               (item.group ?? "").toLowerCase().includes(typed),
           );
 
@@ -114,10 +127,45 @@ export class Picker {
   private lines(): string[] {
     if (this.list.length === 0) return [];
 
-    const lines: string[] = [];
-    if (this.options.title !== undefined) {
-      lines.push(dim(this.options.title));
+    if (this.options.boxed === true) {
+      return box(this.boxedLines(), {
+        ...(this.options.title === undefined ? {} : { title: this.options.title }),
+        ...(this.options.hint === undefined ? {} : { hint: this.options.hint }),
+      }).split("\n");
     }
+
+    return this.plainLines();
+  }
+
+  /** The lines inside the box. */
+  private boxedLines(): string[] {
+    const lines: string[] = [""];
+    const start = windowStart(this.index, this.list.length);
+    const end = Math.min(this.list.length, start + VISIBLE);
+
+    let group: string | undefined;
+    for (let index = start; index < end; index += 1) {
+      const item = this.list[index];
+      if (item === undefined) continue;
+
+      if (item.group !== undefined && item.group !== group) {
+        group = item.group;
+        lines.push(dim(item.group));
+      }
+
+      lines.push(this.itemLine(item, index === this.index));
+    }
+
+    const hidden = this.list.length - (end - start);
+    if (hidden > 0) lines.push(dim(`… ${hidden} more`));
+
+    return lines;
+  }
+
+  /** The lines without a box. */
+  private plainLines(): string[] {
+    const lines: string[] = [];
+    if (this.options.title !== undefined) lines.push(dim(this.options.title));
 
     const start = windowStart(this.index, this.list.length);
     const end = Math.min(this.list.length, start + VISIBLE);
@@ -129,20 +177,38 @@ export class Picker {
 
       if (item.group !== undefined && item.group !== group) {
         group = item.group;
-        lines.push(`  ${cyan(group)}`);
+        lines.push(dim(item.group));
       }
 
-      const mark = index === this.index ? green("▶") : " ";
-      const label = index === this.index ? bold(item.label) : item.label;
-      lines.push(`  ${mark} ${label}`);
+      lines.push(this.itemLine(item, index === this.index));
     }
 
     const hidden = this.list.length - (end - start);
-    if (hidden > 0) {
-      lines.push(dim(`  … ${hidden} more`));
-    }
+    if (hidden > 0) lines.push(dim(`… ${hidden} more`));
 
     return lines;
+  }
+
+  /** One item, with its description. */
+  private itemLine(item: PickerItem, selected: boolean): string {
+    const number =
+      this.options.numbered === true ? `${this.indexOf(item) + 1}. ` : "";
+    const mark = selected ? cyan(">") : " ";
+
+    const name = `${number}${item.label}`;
+    const current = item.current === true ? dim(" (current)") : "";
+
+    const description =
+      item.description === undefined ? "" : `  ${dim(item.description)}`;
+
+    const line = `${mark} ${name}${current}${description}`;
+
+    return selected ? highlight(line) : line;
+  }
+
+  /** Where an item sits in the whole list. */
+  private indexOf(item: PickerItem): number {
+    return this.everything.indexOf(item);
   }
 }
 

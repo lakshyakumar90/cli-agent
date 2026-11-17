@@ -1,0 +1,71 @@
+The loop speaks one internal event format. Adapters translate vendor streams into text, supplied thinking, tool calls, and completion usage.
+
+## Supported connections
+
+| Provider ID    | Connection                                                         |
+| -------------- | ------------------------------------------------------------------ |
+| `openai`       | `OPENAI_API_KEY`                                                   |
+| `anthropic`    | `ANTHROPIC_API_KEY`                                                |
+| `gemini`       | `GEMINI_API_KEY`                                                   |
+| `openrouter`   | `OPENROUTER_API_KEY`                                               |
+| `opencode`     | Direct Zen API with `OPENCODE_API_KEY`                             |
+| `codex`        | Stored OAuth, `CODEX_ACCESS_TOKEN`, or Codex CLI credential import |
+| `antigravity`  | Stored Google OAuth or `ANTIGRAVITY_ACCESS_TOKEN`                  |
+| `opencode-cli` | Locally installed, connected OpenCode CLI                          |
+
+The prefix identifies the adapter; the remainder identifies the model. The OpenCode CLI has a nested reference such as `opencode-cli/opencode/beam-free`. Direct `opencode` and `opencode-cli` use different transports.
+
+## API keys
+
+For Bash or Zsh:
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+agent
+```
+
+For PowerShell:
+
+```powershell
+$env:OPENROUTER_API_KEY="your-key"
+agent
+```
+
+The auth manager checks environment credentials before the local store, normally `~/.myagent/auth.json`. Do not commit this file or paste its contents into an issue.
+
+## Existing CLI logins
+
+The Codex factory can import an existing CLI credential when an agent credential is missing. For OpenCode, install and sign in to OpenCode first; `/model` then browses what it serves.
+
+OAuth login flows require configured client IDs: `MYAGENT_CODEX_CLIENT_ID`, or `MYAGENT_GOOGLE_CLIENT_ID` and the Google client secret where required. This project does not embed vendor client IDs. Use your own registered configuration and respect provider account terms.
+
+## Change models mid-conversation
+
+Use `/model`, search the catalog, and select a model. During a running turn, the choice is staged for the next queued prompt. The footer shows the pending choice. When applied, a “Model changed” marker records the previous and new reference. UI sidecar metadata preserves the marker across resume.
+
+Reasoning-effort choices appear only when advertised in the model catalog. Thinking appears only when the provider supplies it; the UI does not manufacture hidden reasoning.
+
+## The OpenCode bridge
+
+<Diagram
+  name="provider-bridge"
+  title="OpenCode transport and host-owned tools"
+/>
+
+The adapter runs the locally installed OpenCode CLI. A per-turn local plugin clones its built-in agent profile and blocks native execution with an execution hook and replacement executors. Only after both guards are installed does it register a fresh transport agent. If the plugin fails or the installed CLI lacks the required interface, the requested fresh agent does not exist; it cannot fall back to an unguarded built-in agent.
+
+The built-in system and request profile remain intact. The former bridge cleared native tool definitions and replaced the system; that produced a free-limit response even when the normal Beam Free CLI command worked. The current guard preserves OpenCode's profile and executes host tools through the validated text protocol instead. It does not forge provider headers, reset quotas, or call the OpenCode inference API from Agent.
+
+The private process loads the plugin without restarting or changing the user's background service. Existing environment config is preserved and augmented. Temporary plugin files are removed after the process completes. The outer loop applies the same permission and schema checks as other providers, and replay retains tool calls and their results.
+
+This integration was verified against local OpenCode **2.2.5**. Check `opencode --version` in the same shell that launches Agent. On Windows, `Get-Command opencode -All` can reveal multiple npm/pnpm installations. Set `MYAGENT_OPENCODE_COMMAND` to an absolute executable or shim path when PATH selects an older installation. No OpenCode API key is required for this local CLI transport; its existing login and model access apply.
+
+The adapter assembles complete JSONL lines across stdout chunks, normalizes snapshots by part ID, surfaces JSON errors even on exit zero, and rejects empty responses. It supports cancellation and a two-minute process deadline. A quota failure is an upstream error, not a request to retry forever.
+
+## Connect external tools
+
+MCP is a tool connection, not a model provider. Configure local stdio or remote HTTP servers in `.myagent/mcp.json`. Tools become `server__tool` and retain host permission checks. See [extensions](/docs/extensions).
+
+## Costs and data
+
+Access and quotas belong to the connected account. Usage is displayed when reported; estimates depend on model pricing metadata. Messages, relevant code, and tool results may be sent to the provider. This website does not connect to model accounts.

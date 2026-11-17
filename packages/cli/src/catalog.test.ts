@@ -26,12 +26,61 @@ function store(): AuthStore {
   return new AuthStore({ path: join(directory, "auth.json") });
 }
 
+/**
+ * The CLI on this machine, standing in for the real one.
+ *
+ * The catalogue must not depend on what is installed on the machine the
+ * tests run on.
+ */
+function localProvider(): Provider {
+  return {
+    id: "opencode-cli",
+    models: async () => [{ id: "opencode/big-pickle", provider: "opencode-cli" }],
+    async *stream() {},
+  };
+}
+
 describe("the catalogue", () => {
+  it("includes extension models and reports an unavailable provider without losing the rest", async () => {
+    const custom: Provider = {
+      id: "custom",
+      models: async () => [
+        { id: "local", provider: "custom", supportedEfforts: ["low", "high"] },
+      ],
+      async *stream() {},
+    };
+    const unavailable: Provider = {
+      id: "opencode-cli",
+      models: async () => {
+        throw new Error("backend unavailable");
+      },
+      async *stream() {},
+    };
+    const catalog = await buildCatalog({
+      env: {},
+      store: store(),
+      factory: { env: {}, providers: new Map([["custom", custom]]) },
+      providers: new Map([["opencode-cli", unavailable]]),
+    });
+    expect(
+      catalog.models.find((m) => m.ref === "custom/local")?.supportedEfforts,
+    ).toEqual(["low", "high"]);
+    expect(catalog.problems).toContainEqual(
+      expect.objectContaining({
+        provider: "opencode-cli",
+        message: "backend unavailable",
+      }),
+    );
+    // The provider is there and did not answer: that is not the same as a
+    // program that is not installed, and the advice is different.
+    expect(catalog.problems?.[0]?.kind).toBe("unreachable");
+  });
   it("has nothing when there are no credentials", async () => {
     const catalog = await buildCatalog({
       env: {},
       store: store(),
       factory: { env: {} },
+      providers: new Map([["opencode-cli", localProvider()]]),
     });
 
     // The CLIs on the machine need no credential, so they may be there;
@@ -52,6 +101,7 @@ describe("the catalogue", () => {
       env: { OPENAI_API_KEY: "sk-test" },
       store: store(),
       factory: { env: { OPENAI_API_KEY: "sk-test" } },
+      providers: new Map([["opencode-cli", localProvider()]]),
     });
 
     const providers = new Set(catalog.models.map((model) => model.provider));
@@ -66,6 +116,7 @@ describe("the catalogue", () => {
       env: {},
       store: store(),
       factory: { env: {} },
+      providers: new Map([["opencode-cli", localProvider()]]),
     });
 
     expect(catalog.missing).toContain("gemini");

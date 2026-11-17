@@ -1,0 +1,45 @@
+Start with a small task and a read-only session. Inspect the model, tool activity, and permission behavior before permitting edits.
+
+## Open a project
+
+```bash
+agent --cwd ./my-project --mode plan
+```
+
+If no usable credential exists, the UI still opens. Use `/login` or configure your environment, then select a model with `/model`.
+
+## Ask for a map
+
+```text
+Explain the request flow in this project.
+Read the entry point and cite the relevant files.
+```
+
+The transcript shows the prompt, supplied thinking, tool calls, and response. Tool status updates in place. Alt+I opens the latest thinking or tool result with complete arguments. `/inspect` does the same without a keyboard chord.
+
+## Permit a small change
+
+Choose Auto-edit in `/permissions` when ready to allow workspace edits. Shell execution still asks. Request one bounded change, such as validation for an existing input.
+
+Before granting a request, inspect the tool, arguments, workspace, and requesting worker. Explicit deny rules remain effective even in Full access. Esc interrupts the active turn.
+
+## Inspect the result
+
+Use `/diff` for the working tree and `/review` for a separate read-only review of captured changes. Review can draft a follow-up request; it does not apply fixes itself.
+
+## Return later
+
+```bash
+agent --continue
+```
+
+Use `/rename` to give the session a useful title. `/resume` opens the saved-session picker. [Sessions and context](/docs/sessions) explains forks and compaction.
+
+## Script a single prompt
+
+```bash
+agent --mode plan -p "Summarize the public API in this repository"
+agent --json --mode plan -p "List the entry points"
+```
+
+Print mode emits the answer. JSON mode emits events as JSON lines. RPC mode reads JSON lines from standard input for integrations. Configure permissions and handle failures explicitly in scripts; an unattended process cannot approve an interactive request for you.

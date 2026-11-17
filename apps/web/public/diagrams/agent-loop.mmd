@@ -1,0 +1,15 @@
+flowchart TD
+  INPUT[User prompt] --> SAVE[Append user message]
+  SAVE --> LIMITS{Cancelled or over budget?}
+  LIMITS -->|Yes| STOP[Finish with reason]
+  LIMITS -->|No| CONTEXT[Build and compact context]
+  CONTEXT --> PROVIDER[Stream provider events]
+  PROVIDER --> TURN[Accumulate and journal assistant turn]
+  TURN --> CALLS{Tool calls?}
+  CALLS -->|No| ANSWER[Finish answer and usage]
+  CALLS -->|Yes| CHECK[Validate arguments and run pre-hook]
+  CHECK --> POLICY[Check live permissions]
+  POLICY --> RESULT[Run or deny tool]
+  RESULT --> POST[Post-hook and shrink output]
+  POST --> JOURNAL[Journal tool results]
+  JOURNAL --> LIMITS

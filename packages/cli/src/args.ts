@@ -68,7 +68,7 @@ Options:
       --json                     write the events as JSON lines
       --rpc                      read and write JSON lines
       --continue                 carry on with the last session here
-      --resume [id]              open a session (the newest one when none is named)
+      --resume [id]              resume a session (interactive picker when no id is named)
       --log <file>               write the log of the session to this file
       --no-log                   write no log
   -v, --verbose                  show the tool activity

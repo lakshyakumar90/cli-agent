@@ -94,7 +94,8 @@ interface WireFunctionCallOutputItem {
   output: string;
 }
 
-type WireInput = WireInputItem | WireFunctionCallItem | WireFunctionCallOutputItem;
+type WireInput =
+  WireInputItem | WireFunctionCallItem | WireFunctionCallOutputItem;
 
 interface WireUsage {
   input_tokens?: number;
@@ -430,6 +431,15 @@ export function openaiResponses(options: ResponsesOptions): Provider {
         ? {}
         : { reasoning: { effort: reasoningEffort } }),
       ...extraBody,
+      ...(request.reasoningEffort === undefined
+        ? {}
+        : {
+            reasoning: {
+              ...((extraBody.reasoning as
+                Record<string, unknown> | undefined) ?? {}),
+              effort: request.reasoningEffort,
+            },
+          }),
     };
 
     let response: Response;
@@ -558,14 +568,11 @@ export function openaiResponses(options: ResponsesOptions): Provider {
               (key): key is string => typeof key === "string",
             );
             const key = keys.find((candidate) => pending.has(candidate));
-            const call =
-              (key === undefined ? undefined : pending.get(key)) ?? {
-                args: item.arguments ?? "",
-                ...(item.call_id === undefined
-                  ? {}
-                  : { callId: item.call_id }),
-                name: item.name,
-              };
+            const call = (key === undefined ? undefined : pending.get(key)) ?? {
+              args: item.arguments ?? "",
+              ...(item.call_id === undefined ? {} : { callId: item.call_id }),
+              name: item.name,
+            };
             if (key !== undefined) pending.delete(key);
             // Some servers only deliver the arguments on the finished item.
             if (item.arguments !== undefined && item.arguments.length > 0) {
@@ -592,11 +599,14 @@ export function openaiResponses(options: ResponsesOptions): Provider {
           if (type === "response.incomplete") {
             incompleteReason = finishedResponse?.incomplete_details?.reason;
             if (incompleteReason === "content_filter") {
-              throw new ProviderError(`${id}: response blocked by content filter`, {
-                provider: id,
-                code: "protocol",
-                retryable: false,
-              });
+              throw new ProviderError(
+                `${id}: response blocked by content filter`,
+                {
+                  provider: id,
+                  code: "protocol",
+                  retryable: false,
+                },
+              );
             }
           }
           finished = true;

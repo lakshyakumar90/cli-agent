@@ -37,7 +37,10 @@ function mockFetch(
   responder: (url: string, init?: RequestInit) => Response | Promise<Response>,
 ) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
-  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+  const fetchImpl = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const url =
       typeof input === "string"
         ? input
@@ -92,7 +95,10 @@ const READ_TOOL: ToolSpec = {
   },
 };
 
-function makeProvider(response: Response, options: Record<string, unknown> = {}) {
+function makeProvider(
+  response: Response,
+  options: Record<string, unknown> = {},
+) {
   const { fetchImpl, calls } = mockFetch(() => response);
   const provider = openaiResponses({
     id: "openai",
@@ -273,7 +279,12 @@ describe("responses tool calls", () => {
     const { provider } = makeProvider(
       sseResponse([
         event("response.output_item.added", {
-          item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "ls" },
+          item: {
+            type: "function_call",
+            id: "fc_1",
+            call_id: "call_1",
+            name: "ls",
+          },
         }),
         event("response.function_call_arguments.delta", {
           item_id: "fc_1",
@@ -284,7 +295,12 @@ describe("responses tool calls", () => {
           delta: '"src"}',
         }),
         event("response.output_item.done", {
-          item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "ls" },
+          item: {
+            type: "function_call",
+            id: "fc_1",
+            call_id: "call_1",
+            name: "ls",
+          },
         }),
         event("response.completed", { response: { status: "completed" } }),
       ]),
@@ -338,14 +354,24 @@ describe("responses tool calls", () => {
     const { provider } = makeProvider(
       sseResponse([
         event("response.output_item.added", {
-          item: { type: "function_call", id: "fc_1", call_id: "c1", name: "read" },
+          item: {
+            type: "function_call",
+            id: "fc_1",
+            call_id: "c1",
+            name: "read",
+          },
         }),
         event("response.function_call_arguments.delta", {
           item_id: "fc_1",
           delta: '{"path":',
         }),
         event("response.output_item.done", {
-          item: { type: "function_call", id: "fc_1", call_id: "c1", name: "read" },
+          item: {
+            type: "function_call",
+            id: "fc_1",
+            call_id: "c1",
+            name: "read",
+          },
         }),
       ]),
     );
@@ -383,7 +409,13 @@ describe("responses stop reasons", () => {
     const { provider } = makeProvider(
       sseResponse([
         event("response.output_item.done", {
-          item: { type: "function_call", id: "fc_1", call_id: "c1", name: "ls", arguments: "{}" },
+          item: {
+            type: "function_call",
+            id: "fc_1",
+            call_id: "c1",
+            name: "ls",
+            arguments: "{}",
+          },
         }),
         event("response.incomplete", {
           response: {
@@ -434,10 +466,7 @@ describe("responses stop reasons", () => {
   });
 
   it("treats a stream that never completes and never calls a tool as broken", async () => {
-    const { provider } = makeProvider(
-      sseResponse(["[DONE]"]),
-      {},
-    );
+    const { provider } = makeProvider(sseResponse(["[DONE]"]), {});
 
     const error = await collectError(provider, { model: "gpt-5.5" });
     expect(error.message).toContain("ended before response.completed");
@@ -461,6 +490,19 @@ describe("responses stop reasons", () => {
 // ---------------------------------------------------------------------------
 
 describe("responses request", () => {
+  it("honors the session's reasoning effort over the provider default", async () => {
+    const { provider, calls } = makeProvider(
+      sseResponse([event("response.completed", { response: {} })]),
+      { reasoningEffort: "low" },
+    );
+    for await (const _ of provider.stream({
+      ...request({ model: "model" }),
+      reasoningEffort: "high",
+    })) {
+      /* consume */
+    }
+    expect(body(calls).reasoning).toEqual({ effort: "high" });
+  });
   it("translates the transcript into typed input items", async () => {
     const { provider, calls } = makeProvider(
       sseResponse([event("response.completed", { response: {} })]),
@@ -544,7 +586,10 @@ describe("responses request", () => {
       { accessToken: "oauth-token", headers: { originator: "codex_cli_rs" } },
     );
 
-    await collect(provider, { model: "gpt-5.5", messages: [{ role: "user", content: "hi" }] });
+    await collect(provider, {
+      model: "gpt-5.5",
+      messages: [{ role: "user", content: "hi" }],
+    });
 
     const headers = calls[0]?.init?.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer oauth-token");

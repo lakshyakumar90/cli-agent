@@ -1,0 +1,51 @@
+Agent currently runs on the developer's machine. The documentation app is a separate Next.js process with statically generated guide routes. There is no required hosted application server, database, queue, or account system for using the CLI or reading these guides.
+
+## Which boundaries matter?
+
+The terminal process can read local files and launch tools under application permission rules. Provider requests leave the machine for the selected model service, including code or tool output included in context. A local OpenCode connection launches the installed CLI and uses its own local configuration and login. It does not require Agent to call the OpenCode inference API directly.
+
+The website does not execute terminal examples or receive model credentials. Its demonstrations are illustrative UI. Keeping that boundary avoids turning a public documentation page into a remote execution interface.
+
+## Why no cloud backend?
+
+Local execution makes repository access, terminal interaction, and existing CLI logins straightforward. It avoids provisioning accounts, storing visitors' source code, and operating another service. It also puts backups, machine availability, and disk permissions in the user's environment.
+
+A hosted agent becomes a better option for scheduled jobs, team-shared runs, centrally managed policies, or isolated disposable execution. That requires an explicit design for identity, repository authorization, secret injection, per-run isolation, resource limits, artifacts, cancellation, retention, and billing. Adding a database alone does not provide these controls.
+
+## Where should the website run?
+
+| Option                                 | Benefits                                                 | Costs and limitations                                                                      |
+| -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Local Next.js production server        | Reproduces the checked build; simple preview             | Requires the local process and machine to stay available                                   |
+| Managed Next.js platform               | Framework integration, previews, deployment conveniences | Provider coupling and usage-dependent pricing; review limits before choosing               |
+| Node container on a VM or app platform | Control over runtime, headers, and deployment            | Patch images, configure health checks, scale, monitor, and roll back                       |
+| Static export + object storage/CDN     | No application server for public documents               | Requires an export configuration and compatibility check; not the current configured build |
+
+No public deployment has been performed by this implementation. Static generation in the Next.js build does **not** mean an `out/` export or CDN deployment already exists. The current command is `pnpm --filter @cli-agent/web build`, followed by `pnpm --filter @cli-agent/web start`.
+
+## What would a production pipeline do?
+
+Install the pinned dependencies, regenerate the source index, run content/type/browser checks, build, then publish the immutable artifact. Keep preview and production environments distinct. Check the home page, a deep docs URL, search, and diagrams after deployment. Retain the previous artifact for rollback.
+
+Only deployment-specific public metadata belongs in the web environment. Model keys belong to the CLI/provider environment, not a `NEXT_PUBLIC_` variable. Public guides should be cacheable; authentication callbacks and user data would require a separate policy if later introduced.
+
+## Why not Kubernetes, Redis, or a queue?
+
+There is currently no fleet of long-running remote jobs to schedule and no shared mutable server state to coordinate. Kubernetes introduces cluster operations. Redis introduces another stateful service. A queue introduces delivery, retry, idempotency, and cancellation semantics. They can be appropriate for a hosted execution service, but solve no measured bottleneck in this local CLI and documentation site.
+
+## What about isolation and recovery?
+
+Application permission prompts are not an OS sandbox. For stronger isolation, run the CLI inside a controlled container, VM, or separately permissioned workspace and consider network access and mounted secrets. A worker is another runtime task, not automatically a security boundary.
+
+Local sessions need a retention and backup policy if they contain valuable work or sensitive context. Deleting a terminal view does not imply deleting provider logs. Hosted infrastructure would additionally need access controls, encrypted storage, restore drills, and audit records.
+
+## Decision questions before deployment
+
+1. Is this a public documentation site, or will it accept private source code?
+2. Which regions and retention rules apply to any stored data?
+3. Can public pages be served entirely as static assets?
+4. Who owns upgrades, incident response, backups, and cost alerts?
+5. What is the rollback path if the latest build fails?
+6. What workload justifies autoscaling, a queue, or a shared database?
+
+Read [architecture decisions](/docs/decisions) for alternatives and [performance](/docs/performance) for measurement boundaries. The official [Next.js deployment guide](https://nextjs.org/docs/app/getting-started/deploying) distinguishes Node, container, and static export options.

@@ -169,7 +169,10 @@ function toWireMessages(messages: Msg[]): WireMessage[] {
   for (const message of messages) {
     if (message.role === "user") {
       if (message.content.length === 0) continue;
-      push({ role: "user", content: [{ type: "text", text: message.content }] });
+      push({
+        role: "user",
+        content: [{ type: "text", text: message.content }],
+      });
       continue;
     }
 
@@ -191,7 +194,8 @@ function toWireMessages(messages: Msg[]): WireMessage[] {
     const content: WireContentBlock[] = [];
     for (const block of message.content) {
       if (block.type === "text") {
-        if (block.text.length > 0) content.push({ type: "text", text: block.text });
+        if (block.text.length > 0)
+          content.push({ type: "text", text: block.text });
       } else if (block.type === "thinking") {
         if (block.redacted !== undefined) {
           content.push({ type: "redacted_thinking", data: block.redacted });
@@ -432,6 +436,15 @@ export function anthropic(options: AnthropicOptions = {}): Provider {
       ...(system.trim().length > 0 ? { system } : {}),
       ...(tools.length > 0 ? { tools: toWireTools(tools) } : {}),
       ...extraBody,
+      ...(request.reasoningEffort === undefined
+        ? {}
+        : {
+            output_config: {
+              ...((extraBody.output_config as
+                Record<string, unknown> | undefined) ?? {}),
+              effort: request.reasoningEffort,
+            },
+          }),
     };
 
     let response: Response;
@@ -457,7 +470,8 @@ export function anthropic(options: AnthropicOptions = {}): Provider {
     const usage: Usage = { inputTokens: 0, outputTokens: 0 };
     const applyUsage = (wire: WireUsage | undefined): void => {
       if (!wire) return;
-      if (wire.input_tokens !== undefined) usage.inputTokens = wire.input_tokens;
+      if (wire.input_tokens !== undefined)
+        usage.inputTokens = wire.input_tokens;
       if (wire.output_tokens !== undefined) {
         usage.outputTokens = wire.output_tokens;
       }

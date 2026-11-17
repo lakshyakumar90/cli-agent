@@ -5,7 +5,7 @@
  * The line folds, so a long output does not fill the screen.
  */
 
-import { bold, cyan, dim, gray, green, red, yellow } from "./colors.js";
+import { bold, cyan, dim, gray, green, magenta, red, yellow } from "./colors.js";
 import { renderReplacement } from "./diff.js";
 
 /** The permission mode, in colour. */
@@ -41,12 +41,69 @@ export interface ToolBlock {
   expanded: boolean;
   /** The old and new text, when the tool was an edit. */
   replacement?: { oldString: string; newString: string };
+  /** A short line about it, e.g. "12 lines". */
+  summary?: string;
+  /** A few words about it. */
+  detail?: string;
+  /** What kind of thing it was, so it can be told apart by colour. */
+  kind?: "read" | "write" | "edit" | "bash" | "search" | "agent" | "think";
+}
+
+/**
+ * The colour of a kind of block.
+ *
+ * The colours are what tell the actions apart at a glance: what was read,
+ * what was changed, what was run.
+ */
+export function kindColor(
+  kind: ToolBlock["kind"],
+): (text: string) => string {
+  switch (kind) {
+    case "read":
+      return cyan;
+    case "write":
+      return green;
+    case "edit":
+      return yellow;
+    case "bash":
+      return magenta;
+    case "search":
+      return cyan;
+    case "agent":
+      return cyan;
+    case "think":
+      return gray;
+    default:
+      return (text: string) => text;
+  }
+}
+
+/** The kind of a tool, by what it does. */
+export function kindOf(name: string): ToolBlock["kind"] {
+  switch (name) {
+    case "read":
+      return "read";
+    case "write":
+      return "write";
+    case "edit":
+      return "edit";
+    case "bash":
+      return "bash";
+    case "grep":
+    case "glob":
+      return "search";
+    case "task":
+      return "agent";
+    default:
+      return undefined;
+  }
 }
 
 /** A tool block, collapsed or expanded. */
 export function renderToolBlock(block: ToolBlock): string {
   const mark = block.isError === true ? red("✗") : green("●");
-  const name = bold(block.name);
+  const paint = kindColor(block.kind);
+  const name = paint(bold(block.name));
   const summary = toolSummary(block);
   const header = `${mark} ${name}${summary.length > 0 ? dim(` ${summary}`) : ""}`;
 
@@ -72,6 +129,13 @@ export function renderToolResult(block: ToolBlock): string {
 
 /** The one line that says what the tool was asked to do. */
 export function toolSummary(block: ToolBlock): string {
+  if (block.detail !== undefined && block.detail.length > 0) {
+    return block.detail;
+  }
+  if (block.summary !== undefined && block.summary.length > 0) {
+    return block.summary;
+  }
+
   const args = block.args;
   if (args === undefined || args === null) return "";
 
@@ -83,6 +147,10 @@ export function toolSummary(block: ToolBlock): string {
   if (typeof record.pattern === "string") return record.pattern;
   if (typeof record.old_string === "string") {
     return `old: ${firstLine(record.old_string)}`;
+  }
+  if (typeof record.agent === "string") {
+    const prompt = typeof record.prompt === "string" ? record.prompt : "";
+    return `${record.agent}${prompt.length > 0 ? ` ${firstLine(prompt)}` : ""}`;
   }
 
   const keys = Object.keys(record);

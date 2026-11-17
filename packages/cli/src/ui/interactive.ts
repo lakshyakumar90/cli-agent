@@ -1,1233 +1,1462 @@
-/**
- * The interactive session.
- *
- * A prompt, an answer, and the things that hang off them: tool blocks that
- * fold, a status line, slash commands, @-completion, ! for the shell, Esc to
- * interrupt, and Shift+Tab to change how much the agent may do on its own.
- */
+import {
+  Editor,
+  Input,
+  TuiMainScreen,
+  CombinedAutocompleteProvider,
+  matchesKey,
+  truncateToWidth,
+  type Component,
+  type OverlayHandle,
+  type Terminal,
+} from "@earendil-works/pi-tui";
+import type { Provider, Msg } from "@cli-agent/ai";
+import { lookupModel } from "@cli-agent/ai";
+import {
+  run,
+  renderCommand,
+  compactMessages,
+  type AgentState,
+  type SessionStore,
+  type CheckpointStore,
+  type AgentRole,
+  type Command,
+  type WorkerRecord,
+  type WorkerManager,
+} from "@cli-agent/core";
+import {
+  PermissionController,
+  createBashTool,
+  withPermissions,
+  type PermissionMode,
+} from "@cli-agent/tools";
+import type { AvailableModel, Catalog } from "../catalog.js";
+import type { SessionController } from "../session-controller.js";
+import {
+  executeReview,
+  reviewSnapshot,
+  type ReviewRun,
+  type ReviewTarget,
+} from "../review.js";
+import { bold, cyan, dim, red, yellow } from "./colors.js";
+import {
+  blockSummary,
+  Detail,
+  safe,
+  Approval,
+  Selector,
+  selectTheme,
+  Transcript,
+  type Choice,
+} from "./components.js";
+import { UiStore } from "./store.js";
+import { terminalFor } from "./terminal.js";
+import { SLASH_COMMANDS, nextPermissionMode, parseSlash } from "./slash.js";
+import { listFiles } from "./complete.js";
+export { knownModels, modelIdOf, summarise } from "./helpers.js";
 
-import { createInterface, emitKeypressEvents, type Interface as Readline } from "node:readline";
-import type { Msg, Provider, Usage } from "@cli-agent/ai";
-import { lookupModel, type ModelInfo } from "@cli-agent/ai";
-import type { AgentState } from "@cli-agent/core";
-import { run } from "@cli-agent/core";
-import { estimateRequest } from "@cli-agent/core";
-import type { CheckpointStore, SessionStore } from "@cli-agent/core";
-import type { AgentRole, Command } from "@cli-agent/core";
-import { renderCommand } from "@cli-agent/core";
-import type { AvailableModel } from "../catalog.js";
-import { createBashTool } from "@cli-agent/tools";
-import { toToolSpec } from "@cli-agent/tools";
-import type { PermissionMode } from "@cli-agent/tools";
-import { bold, cyan, dim, green, red, yellow } from "./colors.js";
-import { completeFile, completePath, wordAt } from "./complete.js";
-import {
-  renderFooter,
-  renderHeader,
-  renderWelcome,
-  rule,
-  spinnerFrame,
-  type ContextLeft,
-  type WelcomeCommand,
-} from "./frame.js";
-import { Picker, type PickerItem } from "./picker.js";
-import { MarkdownStream } from "./markdown.js";
-import {
-  isKnownSlash,
-  nextPermissionMode,
-  parseShellEscape,
-  parseSlash,
-  SLASH_COMMANDS,
-} from "./slash.js";
-import {
-  permissionLabel,
-  renderToolBlock,
-  renderToolResult,
-  type ToolBlock,
-} from "./status.js";
+/** The name each provider is known by, in the list of models. */
+const PROVIDER_NAMES: Record<string, string> = {
+  "opencode-cli": "OpenCode CLI (on this machine)",
+  opencode: "OpenCode Zen",
+  openrouter: "OpenRouter",
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gemini: "Gemini",
+  codex: "Codex",
+};
+
+/** What to do about a provider that could not be reached. */
+const PROVIDER_ADVICE: Record<string, string> = {
+  "opencode-cli":
+    "install the opencode CLI, or set MYAGENT_OPENCODE_COMMAND to where it is",
+};
+
+/**
+ * What is wrong with the providers that could not be reached.
+ *
+ * The name is said, and what to do about it is said too: "unavailable" on
+ * its own leaves the user guessing. A CLI that is not installed and a CLI
+ * that did not answer are told apart, because telling somebody to install
+ * what they already have is worse than saying nothing.
+ */
+function describeProblems(
+  problems: Array<{
+    provider: string;
+    message: string;
+    kind?: "missing" | "unreachable";
+  }>,
+): string {
+  const parts = problems.map((problem) => {
+    const name = PROVIDER_NAMES[problem.provider] ?? problem.provider;
+    // The bridge says where it looked for the CLI when it is not there;
+    // the advice is only added when it was not said already.
+    const advice =
+      problem.kind === "missing" &&
+      !problem.message.includes("MYAGENT_OPENCODE_COMMAND")
+        ? PROVIDER_ADVICE[problem.provider]
+        : undefined;
+    return advice === undefined
+      ? `${name}: ${problem.message}`
+      : `${name}: ${problem.message} — ${advice}`;
+  });
+  return `Unavailable · ${parts.join(" · ")}`;
+}
 
 export interface InteractiveOptions {
-  /** The state the loop keeps. */
   state: AgentState;
-  /** Where the terminal is. */
   out: NodeJS.WritableStream;
   err: NodeJS.WritableStream;
-  /** The input, for the key handling. */
   input: NodeJS.ReadableStream;
-  /** The model ref, so /model can change it. */
   model: string;
-  /** How much the agent may do without asking. */
   permissionMode: PermissionMode;
-  /** The directory the agent works in. */
   cwd: string;
-  /** Builds a provider for a new model. */
+  controller?: SessionController;
+  permissions?: PermissionController;
+  workerManager?: WorkerManager;
+  terminal?: Terminal;
   onModel?: (ref: string) => Promise<Provider | undefined>;
-  /** Signs in to a provider. */
-  onLogin?: (provider: string) => Promise<string | undefined>;
-  /** The conversations that can be resumed. */
-  sessions?: {
-    list(): Promise<Array<{ id: string; model: string; updatedAt: string }>>;
-    load(id: string): Promise<{ messages: Msg[]; model: string } | undefined>;
-    save(session: {
-      id: string;
-      model: string;
-      createdAt: string;
-      updatedAt: string;
-      messages: Msg[];
-    }): Promise<void>;
-  };
-  /** The id of this session, for saving it. */
+  onLogin?: (
+    provider: string,
+  ) => Promise<string | { ok: boolean; message: string } | undefined>;
+  onModels?: (signal?: AbortSignal) => Promise<AvailableModel[] | Catalog>;
   sessionId?: string;
-  /** Where the conversation is written down. */
   store?: SessionStore;
-  /** The snapshots that make an edit undoable. */
   checkpoints?: CheckpointStore;
-  /** The agents that can be switched to. */
   agents?: Array<{ name: string; model: string; description?: string }>;
-  /** The roles the agent can delegate to. */
   roles?: Map<string, AgentRole>;
-  /** The commands the user has of their own. */
   commands?: Command[];
-  /** Where the log of the session is written. */
   logPath?: string;
-  /**
-   * The models the user can pick.
-   *
-   * It is asked for when the picker is opened, so the list is of today.
-   */
-  onModels?: () => Promise<AvailableModel[]>;
+  workers?: Map<string, WorkerRecord>;
+  resumePicker?: boolean;
+}
+interface Modal {
+  component: Component;
+  cancel(): void;
+  /** How wide the overlay is, when it is not the whole screen. */
+  width?: `${number}%` | number;
+  /** The narrowest the overlay may be. */
+  minWidth?: number;
 }
 
-/** The key that folds the last tool block. */
-const FOLD_KEY = "t";
-
+/** One input owner and one differential renderer for every interactive workflow. */
 export class InteractiveUi {
-  private readonly options: InteractiveOptions;
-  private readonly rl: Readline;
-  private readonly blocks: ToolBlock[] = [];
-
-  private permissionMode: PermissionMode;
+  readonly view = new UiStore();
+  readonly tui: TuiMainScreen;
+  readonly editor: Editor;
+  readonly permissions: PermissionController;
+  private transcript: Transcript;
   private model: string;
-  /** What the whole session has used, so the cost adds up. */
-  private total: Usage = { inputTokens: 0, outputTokens: 0 };
-  private turns = 0;
-  private turn?: AbortController;
-  private working = false;
-  private pumping = false;
+  private modal?: Modal;
+  private suspended?: Modal;
+  private overlay?: OverlayHandle;
+  private approvalId?: string;
   private closed = false;
-  /** The list that is open, when one is. */
-  private picker?: {
-    picker: Picker;
-    /** The key was taken by the list. */
-    onKey: (key: {
-      name?: string;
-      ctrl?: boolean;
-      shift?: boolean;
-      sequence?: string;
-    }) => boolean;
-    /** The line changed, so the list is drawn again. */
-    onChange: () => void;
-  };
-  /** A list is being gathered; the line waits for it. */
-  private preparing = false;
-  private readonly pending: string[] = [];
-  private createdAt = new Date().toISOString();
+  private working = false;
+  private turn?: AbortController;
+  private task?: Promise<void>;
+  private foreground?: Promise<unknown>;
+  private resolveRun?: (code: number) => void;
+  private cleanups: Array<() => void> = [];
+  private timer?: NodeJS.Timeout;
+  private frame = 0;
+  private models: AvailableModel[] = [];
+  private stagedModel?: string;
+  private catalogAbort?: AbortController;
+  private delivered = new Set<string>();
+  private reported = new Set<string>();
+  private reports: Msg[] = [];
+  private workerViews = new Map<string, UiStore>();
+  private workerMessageCounts = new Map<string, number>();
+  private workerSelector?: Selector;
+  private started = false;
+  private initialMode: PermissionMode;
 
-  constructor(options: InteractiveOptions) {
-    this.options = options;
-    this.permissionMode = options.permissionMode;
-    this.model = options.model;
-
-    this.rl = createInterface({
-      input: options.input,
-      output: options.out,
-      terminal: true,
-      history: [],
-      prompt: "",
-    });
-
-    this.rl.on("SIGINT", () => {
-      if (this.working) {
-        this.turn?.abort();
-        return;
-      }
-      this.rl.close();
-    });
-
-    emitKeypressEvents(options.input as NodeJS.ReadStream);
-    (options.input as NodeJS.ReadStream).on("keypress", this.onKeypress);
-  }
-
-  /** Run until the user leaves. */
-  async run(): Promise<number> {
-    return new Promise<number>((resolve) => {
-      this.rl.on("line", (line) => {
-        this.pending.push(line);
-        void this.pump();
+  constructor(readonly options: InteractiveOptions) {
+    this.model = options.controller?.model ?? options.model;
+    this.initialMode = options.permissionMode;
+    this.permissions =
+      options.permissions ??
+      new PermissionController({
+        mode: options.permissionMode,
+        workspace: options.cwd,
       });
-
-      this.rl.on("close", () => {
-        this.closed = true;
-        void this.drain().then(() => resolve(0));
-      });
-
-      // The header says where the agent is, and the welcome says what it
-      // can do.
-      this.write(`${renderHeader({
-        model: this.model,
-        cwd: this.options.cwd,
-        version: "0.1.0",
-      })}\n\n`);
-      this.write(`${renderWelcome(this.welcomeCommands())}\n\n`);
-
-      this.rl.setPrompt(this.promptText());
-      this.rl.prompt();
-    });
-  }
-
-  /** The commands the welcome offers. */
-  private welcomeCommands(): WelcomeCommand[] {
-    const chosen: WelcomeCommand[] = [
-      { name: "/model", description: "choose the model" },
-      { name: "/permissions", description: "choose what the agent may do" },
-      { name: "/agents", description: "the agents it can delegate to" },
-      { name: "/help", description: "the commands, and the keys" },
-    ];
-
-    const custom = this.options.commands ?? [];
-    for (const command of custom) {
-      chosen.push({
-        name: command.name,
-        description: command.description ?? "a command of your own",
-      });
-    }
-
-    return chosen;
-  }
-
-  /**
-   * Take the next line the user typed and do something with it.
-   *
-   * The lines are queued rather than handled where they arrive, so a line
-   * typed during a turn waits for it instead of racing it.
-   */
-  private async pump(): Promise<void> {
-    if (this.pumping) return;
-    this.pumping = true;
-
-    try {
-      while (this.pending.length > 0) {
-        const line = (this.pending.shift() ?? "").trim();
-        if (line.length > 0) await this.handleLine(line);
-
-        // The field closes, and the line under it says where the agent is.
-        if (!this.closed) {
-          this.write(`${rule()}\n`);
-          this.write(`${renderFooter(this.footerInput())}\n`);
-        }
-
-        if (!this.closed) {
-          this.rl.setPrompt(this.promptText());
-          this.rl.prompt();
-        }
-      }
-    } finally {
-      this.pumping = false;
-    }
-  }
-
-  /** Wait for the turn that is running, then finish. */
-  private async drain(): Promise<void> {
-    while (this.working) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
-
-  /** What the user typed, and what it means. */
-  private async handleLine(line: string): Promise<void> {
-    // A list is being gathered: the Enter belongs to the list, not to the
-    // prompt.
-    if (this.preparing) return;
-
-    // A question mark is a question, not a prompt.
-    if (line.trim() === "?") {
-      this.showShortcuts();
-      return;
-    }
-
-    const slash = parseSlash(line);
-    if (slash !== undefined) {
-      await this.handleSlash(slash.name, slash.args);
-      return;
-    }
-
-    const shell = parseShellEscape(line);
-    if (shell !== undefined) {
-      await this.runShell(shell.command);
-      return;
-    }
-
-    await this.ask(line);
-  }
-
-  // -------------------------------------------------------------------------
-  // The slash commands
-  // -------------------------------------------------------------------------
-
-  private async handleSlash(name: string, args: string): Promise<void> {
-    // Leaving is not a command the guide lists, but a session needs a way
-    // out of it.
-    if (name === "/exit" || name === "/quit") {
-      this.closed = true;
-      this.rl.close();
-      return;
-    }
-
-    if (name === "/help") {
-      this.showHelp();
-      return;
-    }
-
-    // A command of the user's own: the file says what to ask.
-    const custom = this.options.commands?.find(
-      (command) => command.name === name,
+    this.tui = new TuiMainScreen(
+      options.terminal ?? terminalFor(options.input, options.out),
     );
-    if (custom !== undefined) {
-      await this.ask(renderCommand(custom, args));
-      return;
-    }
-
-    if (!isKnownSlash({ name, args, raw: name })) {
-      this.write(`${red(`unknown command: ${name}`)}\n`);
-      this.write(dim("try /help for the list\n"));
-      return;
-    }
-
-    switch (name) {
-      case "/model":
-        await this.switchModel(args);
-        return;
-      case "/permissions":
-        this.switchPermissions();
-        return;
-      case "/login":
-        await this.login(args);
-        return;
-      case "/compact":
-        await this.compact();
-        return;
-      case "/clear":
-        this.options.state.messages = [];
-        this.blocks.length = 0;
-        this.total = { inputTokens: 0, outputTokens: 0 };
-        this.turns = 0;
-        this.write(dim("the conversation is empty now\n"));
-        return;
-      case "/resume":
-        await this.resume(args);
-        return;
-      case "/agents":
-        await this.switchAgent(args);
-        return;
-      case "/fork":
-        await this.fork(args);
-        return;
-      case "/tree":
-        await this.tree();
-        return;
-      case "/undo":
-        await this.undo(args);
-        return;
-      default:
-        return;
-    }
-  }
-
-  /** Branch the conversation from an earlier message. */
-  private async fork(args: string): Promise<void> {
-    const store = this.options.store;
-    const sessionId = this.options.sessionId;
-    if (store === undefined || sessionId === undefined) {
-      this.write(dim("this session is not being written down\n"));
-      return;
-    }
-
-    const entries = await store.read(sessionId);
-    if (entries.length === 0) {
-      this.write(dim("there is nothing to fork from\n"));
-      return;
-    }
-
-    // Without an entry named, fork from the last one.
-    const from =
-      args.length > 0
-        ? entries.find((entry) => entry.id === args)
-        : entries[entries.length - 1];
-
-    if (from === undefined) {
-      this.write(`${red(`no message called ${args}`)}\n`);
-      return;
-    }
-
-    const forked = await store.fork(sessionId, from.id, { model: this.model });
-    if (forked === undefined) {
-      this.write(`${red("could not fork from that message")}\n`);
-      return;
-    }
-
-    this.options.sessionId = forked;
-    this.write(`${green("forked")} ${dim(`${sessionId} -> ${forked}`)}\n`);
-  }
-
-  /** The branches of this conversation. */
-  private async tree(): Promise<void> {
-    const store = this.options.store;
-    const sessionId = this.options.sessionId;
-    if (store === undefined || sessionId === undefined) {
-      this.write(dim("this session is not being written down\n"));
-      return;
-    }
-
-    const roots = await store.tree(sessionId);
-    if (roots.length === 0) {
-      this.write(dim("the conversation is empty\n"));
-      return;
-    }
-
-    this.write(`${bold("the conversation")}\n`);
-    const show = (nodes: typeof roots, depth: number): void => {
-      for (const node of nodes) {
-        const text =
-          node.entry.msg.role === "user"
-            ? node.entry.msg.content
-            : node.entry.msg.role === "tool"
-              ? `tool ${node.entry.msg.callId}`
-              : "the model answered";
-        this.write(
-          `${"  ".repeat(depth)}${dim(node.entry.id)} ${String(text).slice(0, 60)}\n`,
-        );
-        show(node.children, depth + 1);
-      }
-    };
-    show(roots, 1);
-  }
-
-  /** Undo the last change to a file. */
-  private async undo(args: string): Promise<void> {
-    const checkpoints = this.options.checkpoints;
-    if (checkpoints === undefined) {
-      this.write(dim("nothing is being checkpointed\n"));
-      return;
-    }
-
-    const path = args.length > 0 ? args : undefined;
-    const undone = await checkpoints.undo(path);
-    if (undone === undefined) {
-      this.write(dim("there is nothing to undo\n"));
-      return;
-    }
-
-    this.write(
-      `${green("undone")} ${dim(`${undone.checkpoint.path} (${undone.checkpoint.callId})`)}\n`,
+    this.transcript = new Transcript(this.view);
+    this.editor = new Editor(
+      this.tui,
+      { borderColor: dim, selectList: selectTheme },
+      { paddingX: 1, autocompleteMaxVisible: 8 },
     );
-  }
-
-  /** Show or change the model. */
-  private async switchModel(args: string): Promise<void> {
-    if (args.length === 0) {
-      // The picker: a list to move through, not a wall of text.
-      const models = await this.availableModels();
-      if (models.length === 0) {
-        this.write(dim("  there is nothing to pick yet\n"));
-        return;
-      }
-
-      const items: PickerItem[] = models.map((model) => ({
-        label: model.id,
-        value: model.ref,
-        group: model.provider,
-      }));
-
-      const chosen = await this.pick(items, "pick a model", {
-        onChange: (picker) => picker.narrow(this.rl.line),
-      });
-      if (chosen === undefined) return;
-
-      await this.useModel(chosen);
-      return;
-    }
-
-    await this.useModel(args);
-  }
-
-  /** Switch to a model, if it can be used. */
-  private async useModel(ref: string): Promise<void> {
-    const onModel = this.options.onModel;
-    if (onModel === undefined) return;
-
-    const provider = await onModel(ref);
-    if (provider === undefined) {
-      this.write(`${red(`could not use ${ref}`)}\n`);
-      return;
-    }
-
-    this.model = ref;
-    this.options.state.provider = provider;
-    this.options.state.model = modelIdOf(ref);
-    this.write(`${green("now using")} ${cyan(ref)}\n`);
-  }
-
-  /**
-   * Put a list under the prompt and let the user move through it.
-   *
-   * The arrows move, Enter takes, Escape puts it away. Any other key goes
-   * to the line as usual, and the list is narrowed down to what was typed.
-   */
-  private pick(
-    items: PickerItem[],
-    title: string,
-    options: {
-      onChange?: (picker: Picker) => void;
-      /** The line to put back when the list goes away. */
-      restore?: string;
-    } = {},
-  ): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      const picker = new Picker(items, {
-        out: this.options.out,
-        title,
-      });
-
-      this.picker = {
-        picker,
-        onKey: (key) => {
-          if (key.name === "up") {
-            picker.move(-1);
-            picker.render();
-            return true;
-          }
-          if (key.name === "down") {
-            picker.move(1);
-            picker.render();
-            return true;
-          }
-          if (key.name === "return" || key.name === "enter") {
-            const chosen = picker.selected?.value;
-            this.closePicker(options.restore);
-            resolve(chosen);
-            return true;
-          }
-          if (key.name === "escape") {
-            this.closePicker(options.restore);
-            resolve(undefined);
-            return true;
-          }
-          return false;
-        },
-        onChange: () => {
-          options.onChange?.(picker);
-          picker.render();
-        },
-      };
-
-      picker.render();
-    });
-  }
-
-  /** Take the picker off the screen and put the line back. */
-  private closePicker(restore?: string): void {
-    this.picker = undefined;
-    this.restoreLine(restore);
-  }
-
-  /** Redraw the input line, after something was drawn under it. */
-  private restoreLine(line?: string): void {
-    const text = line ?? this.rl.line;
-    this.rl.write(null, { ctrl: true, name: "u" });
-    this.rl.write(null, { ctrl: true, name: "k" });
-    this.rl.write(text);
-  }
-
-  /**
-   * The models the user can pick.
-   *
-   * The list is asked for when the picker is opened, so it is the list of
-   * today: the free models of a router change from day to day.
-   */
-  private async availableModels(): Promise<AvailableModel[]> {
-    const onModels = this.options.onModels;
-    if (onModels === undefined) {
-      return knownModels().map((ref) => ({
-        ref,
-        provider: modelIdOf(ref) === ref ? ref : ref.split("/")[0] ?? ref,
-        id: modelIdOf(ref),
-        free: false,
-      }));
-    }
-
-    try {
-      return await onModels();
-    } catch {
-      return [];
-    }
-  }
-
-  /** Change how much the agent may do on its own. */
-  private switchPermissions(): void {
-    this.permissionMode = nextPermissionMode(this.permissionMode);
-    this.write(
-      `${dim("permission mode:")} ${permissionLabel(this.permissionMode)}\n`,
+    const autocomplete = new CombinedAutocompleteProvider(
+      [
+        ...SLASH_COMMANDS.map((c) => ({
+          name: c.name.slice(1),
+          description: c.description,
+        })),
+        ...(options.commands ?? []).map((c) => ({
+          name: c.name.slice(1),
+          description: c.description,
+        })),
+      ],
+      options.cwd,
     );
-  }
-
-  /** Sign in to a provider. */
-  private async login(args: string): Promise<void> {
-    const onLogin = this.options.onLogin;
-    if (onLogin === undefined) {
-      this.write(dim("this build cannot sign in\n"));
-      return;
-    }
-    if (args.length === 0) {
-      this.write(dim("/login <provider>\n"));
-      return;
-    }
-
-    const message = await onLogin(args);
-    this.write(`${message ?? dim("nothing to do")}\n`);
-  }
-
-  /** Summarise the conversation and start again from the summary. */
-  private async compact(): Promise<void> {
-    const messages = this.options.state.messages;
-    if (messages.length === 0) {
-      this.write(dim("there is nothing to compact\n"));
-      return;
-    }
-
-    const summary = await summarise(this.options.state, messages);
-    if (summary === undefined) {
-      this.write(`${red("could not summarise the conversation")}\n`);
-      return;
-    }
-
-    const kept = messages.slice(-2);
-    this.options.state.messages = [
-      { role: "user", content: `Earlier in this conversation:\n${summary}` },
-      ...kept,
-    ];
-    this.write(
-      `${green("compacted")} ${dim(
-        `(${messages.length} messages -> ${this.options.state.messages.length})`,
-      )}\n`,
-    );
-  }
-
-  /** Go back to an earlier conversation. */
-  private async resume(args: string): Promise<void> {
-    const sessions = this.options.sessions;
-    if (sessions === undefined) {
-      this.write(dim("this build keeps no conversations\n"));
-      return;
-    }
-
-    if (args.length === 0) {
-      const saved = await sessions.list();
-      if (saved.length === 0) {
-        this.write(dim("there are no earlier conversations\n"));
-        return;
-      }
-      this.write(`${bold("conversations")}\n`);
-      for (const session of saved) {
-        this.write(`  ${session.id}  ${dim(session.updatedAt)}\n`);
-      }
-      this.write(dim("\n/resume <id> to go back to one\n"));
-      return;
-    }
-
-    const session = await sessions.load(args);
-    if (session === undefined) {
-      this.write(`${red(`no conversation called ${args}`)}\n`);
-      return;
-    }
-
-    this.options.state.messages = session.messages;
-    this.write(`${green("resumed")} ${dim(args)}\n`);
-  }
-
-  /** The keys, and what they do. */
-  private showShortcuts(): void {
-    const keys: Array<[string, string]> = [
-      ["Esc", "stop the turn"],
-      ["Shift+Tab", "the permission mode"],
-      ["Ctrl+T", "fold the last tool block"],
-      ["Tab", "the files, after an @"],
-      ["@file", "put a file in the prompt"],
-      ["!command", "run a shell command"],
-      ["/model", "the models you can use"],
-      ["/help", "the commands"],
-      ["?", "this list"],
-    ];
-
-    this.write(`${bold("the keys")}\n`);
-    for (const [key, what] of keys) {
-      this.write(`  ${cyan(key.padEnd(12))} ${dim(what)}\n`);
-    }
-  }
-
-  /** The commands the session knows. */
-  private showHelp(): void {
-    this.write(`${bold("the commands")}\n`);
-
-    for (const command of SLASH_COMMANDS) {
-      this.write(`  ${command.name}  ${dim(command.description)}\n`);
-    }
-
-    const custom = this.options.commands ?? [];
-    if (custom.length > 0) {
-      this.write(`\n${bold("your own commands")}\n`);
-      for (const command of custom) {
-        const hint =
-          command.argumentHint === undefined ? "" : ` ${command.argumentHint}`;
-        this.write(
-          `  ${command.name}${hint}  ${dim(command.description ?? "")}\n`,
-        );
-      }
-    }
-
-    this.write(dim("\n@file puts a file in the prompt, !command runs a shell\n"));
-
-    const logPath = this.options.logPath;
-    if (logPath !== undefined && logPath.length > 0) {
-      this.write(dim(`\nthe log of this session is at ${logPath}\n`));
-    }
-  }
-
-  /** List or switch the agent. */
-  private async switchAgent(args: string): Promise<void> {
-    const agents = this.options.agents ?? [];
-    const roles = this.options.roles;
-
-    if (agents.length === 0 && (roles === undefined || roles.size === 0)) {
-      this.write(dim("no other agents are configured\n"));
-      return;
-    }
-
-    if (args.length === 0) {
-      if (roles !== undefined && roles.size > 0) {
-        this.write(`${bold("the agents you can delegate to")}\n`);
-        for (const [name, role] of roles) {
-          this.write(
-            `  ${name}  ${dim(role.description ?? role.model ?? "")}\n`,
-          );
-        }
-      }
-      if (agents.length > 0) {
-        this.write(`${bold("agents")}\n`);
-        for (const agent of agents) {
-          const mark = agent.name === "main" ? green("●") : " ";
-          this.write(
-            `${mark} ${agent.name}  ${dim(agent.description ?? agent.model)}\n`,
-          );
-        }
-        this.write(dim("\n/agents <name> to switch\n"));
-      }
-      return;
-    }
-
-    const agent = agents.find((candidate) => candidate.name === args);
-    if (agent === undefined) {
-      this.write(`${red(`no agent called ${args}`)}\n`);
-      return;
-    }
-
-    const onModel = this.options.onModel;
-    if (onModel !== undefined) {
-      const provider = await onModel(agent.model);
-      if (provider !== undefined) {
-        this.options.state.provider = provider;
-        this.options.state.model = modelIdOf(agent.model);
-        this.model = agent.model;
-      }
-    }
-    this.write(`${green("now the")} ${bold(agent.name)} ${dim("agent")}\n`);
-  }
-
-  // -------------------------------------------------------------------------
-  // The shell escape
-  // -------------------------------------------------------------------------
-
-  private async runShell(command: string): Promise<void> {
-    const result = await createBashTool().run(
-      { command },
-      {
-        cwd: this.options.cwd,
-        signal: new AbortController().signal,
+    this.editor.setAutocompleteProvider({
+      triggerCharacters: ["@"],
+      getSuggestions: async (lines, row, col, request) => {
+        const prefix = /(?:^|\s)(@\S*)$/.exec(
+          (lines[row] ?? "").slice(0, col),
+        )?.[1];
+        if (!prefix)
+          return autocomplete.getSuggestions(lines, row, col, request);
+        const files = await listFiles(options.cwd);
+        if (request.signal.aborted) return null;
+        const items = files
+          .filter((file) =>
+            file.toLowerCase().includes(prefix.slice(1).toLowerCase()),
+          )
+          .slice(0, 30)
+          .map((file) => ({
+            label: file,
+            value: /\s/.test(file) ? `@"${file}"` : `@${file}`,
+          }));
+        return items.length ? { items, prefix } : null;
       },
-    );
+      applyCompletion: (...args) => autocomplete.applyCompletion(...args),
+      shouldTriggerFileCompletion: (...args) =>
+        autocomplete.shouldTriggerFileCompletion(...args),
+    });
+    this.editor.onSubmit = (text) => {
+      this.editor.addToHistory(text);
+      this.editor.setText("");
+      void this.submit(text).catch((error) => this.notice(error));
+    };
+    const root: Component = {
+      invalidate: () => this.transcript.invalidate(),
+      render: (width) => {
+        const session = options.store?.id ?? options.sessionId ?? "unsaved";
+        const usage = options.controller?.usage;
+        const workers = options.workerManager?.active.length ?? 0;
+        const info = lookupModel(
+          this.model.split("/")[0] ?? "",
+          this.model.slice(this.model.indexOf("/") + 1),
+        );
+        const footer = `${this.model} · permission mode: ${this.modeLabel()}${usage ? ` · ${usage.inputTokens} in / ${usage.outputTokens} out` : ""}${info?.contextWindow ? ` · ${info.contextWindow.toLocaleString()} context` : ""}${workers ? ` · ${workers} workers` : ""}`;
 
-    this.write(`${dim(`$ ${command}`)}\n`);
-    this.write(`${result.output}\n`);
+        const header = truncateToWidth(
+          `${bold("agent")}  ${cyan(this.model)}  ${dim(options.cwd)}  ${dim(session)}`,
+          width,
+        );
+        const activity = truncateToWidth(
+          this.view.activity
+            ? `${cyan(["◐", "◓", "◑", "◒"][this.frame % 4] ?? "○")} ${this.view.activity} · Esc to interrupt`
+            : dim(this.view.notice || "Ready"),
+          width,
+        );
+        const queued = this.view.pending.length
+          ? [
+              truncateToWidth(
+                dim(
+                  `${this.view.pending.length} queued · next: ${safe(this.view.pending[0] ?? "")}`,
+                ),
+                width,
+              ),
+            ]
+          : [];
+        const staged = this.stagedModel
+          ? [truncateToWidth(dim(`Next turn: ${this.stagedModel}`), width)]
+          : [];
+        const editor = this.editor.render(width);
+        const facts = truncateToWidth(dim(footer), width);
+        const keys = truncateToWidth(
+          dim(
+            "Shift+Tab mode · Alt+I inspect · Ctrl+O transcript · Ctrl+B workers · /help · ? shortcuts",
+          ),
+          width,
+        );
+
+        // The frame has to fit on the screen: a frame that is taller than
+        // the terminal is written over the terminal, and the conversation
+        // ends up on the screen twice. The conversation is trimmed to what
+        // is left of the rows.
+        const chrome = 3 + queued.length + staged.length + editor.length + 2;
+        const room = Math.max(1, this.tui.terminal.rows - chrome);
+
+        return [
+          header,
+          "",
+          ...(this.view.blocks.length === 0
+            ? this.welcome(width)
+            : this.transcript.renderWithin(width, room)),
+          activity,
+          ...queued,
+          ...staged,
+          ...editor,
+          facts,
+          keys,
+        ];
+      },
+    };
+    this.tui.addChild(root);
+    this.tui.setFocus(this.editor);
+    this.cleanups.push(this.tui.addInputListener((data) => this.keys(data)));
   }
-
-  // -------------------------------------------------------------------------
-  // The turn
-  // -------------------------------------------------------------------------
-
-  /** Ask the model something and show the answer. */
-  private async ask(prompt: string): Promise<void> {
-    this.working = true;
-    this.turn = new AbortController();
-    const controller = this.turn;
-    const markdown = new MarkdownStream();
-
-    this.write("\n");
-
-    // The spinner says the agent is working. It steps aside as soon as
-    // there is something to show.
-    const spinner = this.startSpinner();
-
-    try {
-      for await (const event of run(this.options.state, prompt, controller.signal)) {
-        switch (event.t) {
-          case "text": {
-            spinner.stop();
-            const text = markdown.write(event.delta);
-            if (text.length > 0) this.write(text);
-            break;
+  run(): Promise<number> {
+    this.started = true;
+    this.reload();
+    this.cleanups.push(this.permissions.subscribe(() => this.approvals()));
+    if (this.options.workerManager)
+      this.cleanups.push(
+        this.options.workerManager.subscribe(({ worker, event }) => {
+          let view = this.workerViews.get(worker.id);
+          const userMessages = worker.messages.filter(
+            (message) => message.role === "user",
+          ).length;
+          if (
+            !view ||
+            event?.t === "done" ||
+            this.workerMessageCounts.get(worker.id) !== userMessages
+          ) {
+            view = new UiStore();
+            view.restore(worker.messages, worker.id);
+            this.workerViews.set(worker.id, view);
+            this.workerMessageCounts.set(worker.id, userMessages);
           }
-
-          case "thinking":
-            // The reasoning is not the answer; it is not shown.
-            break;
-
-          case "toolStart": {
-            spinner.stop();
-            const block: ToolBlock = {
-              id: event.call.id,
-              name: event.call.name,
-              args: event.call.args,
-              expanded: false,
-              ...(event.call.name === "edit"
-                ? { replacement: replacementOf(event.call.args) }
-                : {}),
-            };
-            this.blocks.push(block);
-            this.write(`\n${renderToolBlock(block)}\n`);
-            break;
-          }
-
-          case "toolEnd": {
-            const block = this.blocks.find(
-              (candidate) => candidate.id === event.call.id,
-            );
-            if (block !== undefined) {
-              block.output = event.output;
-              block.isError = event.isError === true;
-              // The header was printed when the tool was asked for; the
-              // result goes under it.
-              const result = renderToolResult(block);
-              if (result.length > 0) this.write(`${indent(result)}\n`);
+          if (event) view.event(event);
+          this.workerSelector?.setItems(this.workerChoices());
+          if (worker.status === "completed") {
+            const key = `${worker.id}:${worker.runNumber}`;
+            if (!this.delivered.has(key)) {
+              this.delivered.add(key);
+              this.view.notice = `${worker.agent} completed · Ctrl+B to inspect`;
             }
-            break;
           }
-
-          case "done": {
-            this.turns += event.turns;
-            // What the session has used, so the cost adds up.
-            this.total = {
-              inputTokens: this.total.inputTokens + event.usage.inputTokens,
-              outputTokens:
-                this.total.outputTokens + event.usage.outputTokens,
-              ...(event.usage.cacheReadTokens === undefined
-                ? {}
-                : {
-                    cacheReadTokens:
-                      (this.total.cacheReadTokens ?? 0) +
-                      event.usage.cacheReadTokens,
-                  }),
-              ...(event.usage.cacheWriteTokens === undefined
-                ? {}
-                : {
-                    cacheWriteTokens:
-                      (this.total.cacheWriteTokens ?? 0) +
-                      event.usage.cacheWriteTokens,
-                  }),
-            };
-            break;
-          }
-
-          case "retry":
-            this.write(`${yellow(`retrying in ${event.delayMs}ms`)}\n`);
-            break;
-        }
-      }
-    } catch (error) {
-      this.write(
-        `${red(error instanceof Error ? error.message : String(error))}\n`,
+          this.render();
+        }),
       );
-    } finally {
-      spinner.stop();
-      const rest = markdown.flush();
-      if (rest.length > 0) this.write(rest);
-      this.working = false;
-      this.turn = undefined;
-    }
-
-    await this.save();
-    this.write("\n");
-  }
-
-  /**
-   * The status line, with what the model table says the model costs.
-   *
-   * It also says how much of the context is left, so the user knows when
-   * the conversation is about to be summarised.
-   */
-  private statusInput(): {
-    model: string;
-    usage?: Usage;
-    info?: ModelInfo;
-    permissionMode: string;
-    turns: number;
-    left?: ContextLeft;
-  } {
-    const provider = this.model.split("/")[0] as string;
-    const info = lookupModel(provider, modelIdOf(this.model));
-
-    return {
-      model: modelIdOf(this.model),
-      // What the whole session has used, so the cost is what it has cost.
-      ...(this.turns === 0 ? {} : { usage: this.total }),
-      ...(info === undefined ? {} : { info }),
-      permissionMode: this.permissionMode,
-      turns: this.turns,
-      ...(this.contextLeft() === undefined
-        ? {}
-        : { left: this.contextLeft() as ContextLeft }),
+    const onEnd = (): void => {
+      void this.close();
     };
-  }
-
-  /**
-   * The spinner.
-   *
-   * It says the agent is working, and it steps aside as soon as there is
-   * something to show: the answer, or a tool that is running.
-   *
-   * It is one line, and it turns where it is: the frame is written and the
-   * cursor is left on the line below it, so the next frame takes the line
-   * back rather than pushing it down.
-   */
-  private startSpinner(): { stop: () => void } {
-    let step = 0;
-    let timer: NodeJS.Timeout | undefined;
-    let drawn = false;
-
-    const draw = (): void => {
-      // The line is taken away and put again.
-      if (drawn) this.write("\x1b[1A\r\x1b[2K");
-      this.write(`${cyan(spinnerFrame(step))} ${dim("working")}\n`);
-      drawn = true;
-      step += 1;
-    };
-
-    draw();
-    timer = setInterval(draw, 90);
-
-    return {
-      stop: () => {
-        if (timer !== undefined) clearInterval(timer);
-        timer = undefined;
-        if (!drawn) return;
-        // The spinner is one line above the cursor: take it away.
-        this.write("\x1b[1A\r\x1b[2K");
-        drawn = false;
-      },
-    };
-  }
-
-  /** How much of the context is left, when it can be worked out. */
-  private contextLeft(): ContextLeft | undefined {
-    const provider = this.model.split("/")[0] as string;
-    const model = modelIdOf(this.model);
-
-    const total = lookupModel(provider, model)?.contextWindow;
-    if (total === undefined) return undefined;
-
-    const used = estimateRequest({
-      model,
-      system: this.options.state.system ?? "",
-      messages: this.options.state.messages,
-      tools: this.options.state.tools.map(toToolSpec),
+    this.options.input.on("end", onEnd);
+    this.cleanups.push(() => this.options.input.removeListener("end", onEnd));
+    const promise = new Promise<number>((resolve) => {
+      this.resolveRun = resolve;
     });
-
-    return { used, total };
-  }
-
-  /** The prompt, with the field it sits in. */
-  private promptText(): string {
-    return `${rule()}\n${cyan(">")} `;
-  }
-
-  /** What the line under the field says. */
-  private footerInput(): {
-    model: string;
-    cwd: string;
-    usage?: Usage;
-    info?: ModelInfo;
-    turns: number;
-    left?: ContextLeft;
-    permissionMode: string;
-    hints: string[];
-  } {
-    const provider = this.model.split("/")[0] as string;
-    const info = lookupModel(provider, modelIdOf(this.model));
-    const left = this.contextLeft();
-
-    return {
-      model: modelIdOf(this.model),
-      cwd: this.options.cwd,
-      ...(this.turns === 0 ? {} : { usage: this.total }),
-      ...(info === undefined ? {} : { info }),
-      turns: this.turns,
-      ...(left === undefined ? {} : { left }),
-      permissionMode: this.permissionMode,
-      hints: ["? for shortcuts", "esc interrupts"],
-    };
-  }
-
-  /** Write to the terminal. */
-  private write(text: string): void {
-    this.options.out.write(text);
-  }
-
-  /** Save the conversation, so /resume can find it. */
-  private async save(): Promise<void> {
-    const sessions = this.options.sessions;
-    if (sessions === undefined) return;
-
-    await sessions.save({
-      id: this.options.sessionId ?? "session",
-      model: this.model,
-      createdAt: this.createdAt,
-      updatedAt: new Date().toISOString(),
-      messages: this.options.state.messages,
-    });
-  }
-
-  // -------------------------------------------------------------------------
-  // The keys
-  // -------------------------------------------------------------------------
-
-  private readonly onKeypress = (
-    _text: string,
-    key: { name?: string; ctrl?: boolean; shift?: boolean; sequence?: string },
-  ): void => {
-    // A list that is open takes the keys that move it.
-    const picker = this.picker;
-    if (picker !== undefined) {
-      if (picker.onKey(key)) return;
-      // Any other key goes to the line, and the list is drawn again.
-      picker.onChange();
-      return;
-    }
-
-    // Node reports a lone Esc as "escape" when the next key completes the
-    // sequence, and with no name at all when it is flushed on its own.
-    if (key.name === "escape" || key.sequence === "") {
-      if (this.working) {
-        this.turn?.abort();
-        this.write(`${yellow("interrupted")}\n`);
+    this.tui.start();
+    this.timer = setInterval(() => {
+      if (this.view.activity) {
+        this.frame++;
+        this.render();
       }
-      return;
-    }
-
-    if (key.name === "tab" && key.shift === true) {
-      this.permissionMode = nextPermissionMode(this.permissionMode);
-      this.write(
-        `${dim("permission mode:")} ${permissionLabel(this.permissionMode)}\n`,
-      );
-      return;
-    }
-
-    if (key.ctrl === true && key.name === FOLD_KEY) {
-      const block = this.blocks[this.blocks.length - 1];
-      if (block !== undefined) {
-        block.expanded = !block.expanded;
-        this.write(`${renderToolBlock(block)}\n`);
-      }
-      return;
-    }
-
-    if (key.name === "tab" && key.shift !== true) {
-      void this.complete();
-    }
-  };
-
+    }, 120);
+    this.timer.unref();
+    this.approvals();
+    if (this.options.resumePicker)
+      void this.sessions().catch((error) => this.notice(error));
+    return promise;
+  }
+  private render(): void {
+    if (this.started && !this.closed) this.tui.requestRender();
+  }
   /**
-   * Complete an @-mention with a file.
+   * What the session says when it has nothing to say yet.
    *
-   * The files that match are put in a list under the prompt: the arrows
-   * move through them, Enter takes the one that is on.
+   * The commands that are worth knowing are named, so that the first
+   * question does not have to be looked up.
    */
-  private async complete(): Promise<void> {
-    // The tab that was just pressed is in the line already, and it would
-    // hide the word being completed.
-    const raw = this.rl.line;
-    const line = raw.replace(/\t+$/, "");
-    const cursor = Math.max(
-      0,
-      (this.rl.cursor ?? raw.length) - (raw.length - line.length),
+  private welcome(width: number): string[] {
+    const lines = [
+      `${dim("Describe the task and press Enter.")}`,
+      `${dim("")}${cyan("/model")} ${dim("choose the model")}  ${cyan("/help")} ${dim("the commands and the keys")}`,
+    ];
+    return lines.map((line) => truncateToWidth(line, width));
+  }
+  private modeLabel(): string {
+    return this.permissions.mode === "yolo"
+      ? "Full access"
+      : this.permissions.mode;
+  }
+  private notice(value: unknown): void {
+    this.view.notice = value instanceof Error ? value.message : String(value);
+    this.render();
+  }
+  private reload(): void {
+    this.model = this.options.controller?.model ?? this.model;
+    this.view.restore(
+      this.options.state.messages,
+      this.options.store?.id ?? "session",
+      this.options.controller?.modelChanges,
+      this.model,
     );
-
-    const word = wordAt(line, cursor);
-    if (word === undefined) return;
-
-    // The list takes a moment to gather; an Enter in the meantime belongs
-    // to the list, not to the prompt.
-    this.preparing = true;
-    let candidates: string[];
-    try {
-      candidates = await this.fileCandidates(word.word.slice(1));
-    } finally {
-      this.preparing = false;
+    this.workerViews.clear();
+    this.workerMessageCounts.clear();
+    this.render();
+  }
+  private keys(data: string): { consume: boolean } | undefined {
+    if (matchesKey(data, "ctrl+d") && !this.modal && !this.editor.getText()) {
+      void this.close();
+      return { consume: true };
     }
-    if (candidates.length === 0) return;
-
-    const items: PickerItem[] = candidates.map((path) => ({
-      label: path,
-      value: path,
-    }));
-
-    const chosen = await this.pick(items, "pick a file", {
-      // The tab that was pressed is not part of what the user wrote.
-      restore: line,
-      onChange: (picker) => {
-        // The line changed, so the files that match it changed too.
-        void this.refineFiles(picker, word);
-      },
-    });
-    if (chosen === undefined) return;
-
-    // The chosen path goes into the line, in place of what was typed.
-    const next =
-      line.slice(0, word.start) + `@${chosen}` + line.slice(cursor);
-    this.rl.write(null, { ctrl: true, name: "u" });
-    this.rl.write(null, { ctrl: true, name: "k" });
-    this.rl.write(next);
-  }
-
-  /** The files that could complete what is being typed. */
-  private async fileCandidates(typed: string): Promise<string[]> {
-    const directories = await completePath(typed, this.options.cwd);
-    const files = await completeFile(typed, this.options.cwd);
-    return [...directories, ...files];
-  }
-
-  /** Narrow the file list down to what is being typed now. */
-  private async refineFiles(
-    picker: Picker,
-    word: { word: string; start: number },
-  ): Promise<void> {
-    const line = this.rl.line;
-    const cursor = this.rl.cursor ?? line.length;
-    const current = wordAt(line, cursor);
-
-    const typed =
-      current === undefined
-        ? word.word.slice(1)
-        : current.word.slice(1);
-
-    const candidates = await this.fileCandidates(typed);
-    picker.items = candidates.map((path) => ({ label: path, value: path }));
-  }
-}
-
-/**
- * The models the agent knows about, for /model.
- *
- * This is the fallback: the real list is asked of the providers when the
- * picker is opened, so the free models of a router are the ones that
- * exist today.
- */
-export function knownModels(): string[] {
-  return [
-    "openrouter/nvidia/nemotron-3.5-lightning:free",
-    "openrouter/inclusionai/ling-3.2-flash:free",
-    "openrouter/cohere/north-mini-code:free",
-    "codex/gpt-6.1-sol",
-    "opencode-cli/opencode/big-pickle",
-    "anthropic/claude-sonnet-5-5",
-    "openai/gpt-6.1-sol",
-    "gemini/gemini-3.1-flash-lite",
-  ];
-}
-
-function indent(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => `  ${line}`)
-    .join("\n");
-}
-
-/** The model id of a "provider/model" ref. */
-export function modelIdOf(ref: string): string {
-  const slash = ref.indexOf("/");
-  return slash <= 0 ? ref : ref.slice(slash + 1);
-}
-
-/** The old and new text of an edit, when the tool was one. */
-function replacementOf(
-  args: unknown,
-): { oldString: string; newString: string } | undefined {
-  if (typeof args !== "object" || args === null) return undefined;
-  const record = args as Record<string, unknown>;
-  if (typeof record.old_string !== "string") return undefined;
-  return {
-    oldString: record.old_string,
-    newString: typeof record.new_string === "string" ? record.new_string : "",
-  };
-}
-
-/**
- * Summarise a conversation, so the context can start again from the summary.
- */
-export async function summarise(
-  state: AgentState,
-  messages: Msg[],
-): Promise<string | undefined> {
-  const transcript = messages
-    .map((message) => `${message.role}: ${contentOf(message)}`)
-    .join("\n\n");
-
-  const pieces: string[] = [];
-  try {
-    for await (const event of state.provider.stream({
-      model: state.model,
-      system:
-        "Summarise this conversation in a few lines: what was asked, what was done, and what is left. Keep the details that matter for continuing.",
-      messages: [{ role: "user", content: transcript }],
-      tools: [],
-      signal: new AbortController().signal,
-    })) {
-      if (event.t === "text") pieces.push(event.delta);
+    if (matchesKey(data, "ctrl+c")) {
+      if (this.modal) this.modal.cancel();
+      else if (this.working) this.turn?.abort();
+      else void this.close();
+      return { consume: true };
     }
-  } catch {
+    if (this.modal) return undefined;
+    if (matchesKey(data, "escape")) {
+      this.turn?.abort();
+      return { consume: true };
+    }
+    if (matchesKey(data, "shift+tab")) {
+      this.permissions.setMode(nextPermissionMode(this.permissions.mode));
+      this.render();
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+o")) {
+      this.detail("Transcript", () => this.transcriptText());
+      return { consume: true };
+    }
+    if (matchesKey(data, "alt+i")) {
+      this.inspectLatest();
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+b")) {
+      void this.workers();
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+r")) {
+      void this.select(
+        "Prompt history",
+        this.options.state.messages
+          .filter((m) => m.role === "user")
+          .map((m, index) => ({
+            label: m.content as string,
+            value: String(index),
+          })),
+      ).then((choice) => {
+        if (choice) {
+          this.editor.setText(choice.label);
+          this.render();
+        }
+      });
+      return { consume: true };
+    }
+    if (data === "?" && !this.editor.getText()) {
+      this.help();
+      return { consume: true };
+    }
     return undefined;
   }
-
-  const summary = pieces.join("").trim();
-  return summary.length > 0 ? summary : undefined;
+  private show(modal: Modal): void {
+    this.overlay?.hide();
+    this.modal = modal;
+    this.overlay = this.tui.showOverlay(modal.component, {
+      width: modal.width ?? "100%",
+      ...(modal.minWidth === undefined ? {} : { minWidth: modal.minWidth }),
+      maxHeight: "100%",
+      anchor: "bottom-center",
+      margin: 0,
+    });
+    this.render();
+  }
+  private dismiss(modal = this.modal): void {
+    if (modal !== this.modal) return;
+    this.overlay?.hide();
+    this.overlay = undefined;
+    this.modal = undefined;
+    this.tui.setFocus(this.editor);
+    this.render();
+  }
+  private select(
+    title: string,
+    choices: Choice[],
+    description = "",
+    searchable = true,
+  ): Promise<Choice | undefined> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (choice?: Choice): void => {
+        if (done) return;
+        done = true;
+        this.dismiss(modal);
+        resolve(choice);
+      };
+      const selector = new Selector(
+        title,
+        choices,
+        () => this.tui.terminal.rows,
+        finish,
+        searchable,
+        description,
+      );
+      const modal: Modal = { component: selector, cancel: () => finish() };
+      this.show(modal);
+    });
+  }
+  private prompt(title: string, initial = ""): Promise<string | undefined> {
+    return new Promise((resolve) => {
+      const input = new Input({ prompt: "> " });
+      input.setValue(initial);
+      let done = false;
+      const finish = (text?: string): void => {
+        if (done) return;
+        done = true;
+        this.dismiss(modal);
+        resolve(text);
+      };
+      input.onSubmit = (text) => finish(text);
+      input.onEscape = () => finish();
+      const component: Component = {
+        invalidate: () => input.invalidate(),
+        render: (width) => {
+          input.focused = true;
+          return [
+            truncateToWidth(bold(title), width),
+            "",
+            ...input.render(width),
+            "",
+            truncateToWidth(dim("Enter confirm · Esc back"), width),
+          ];
+        },
+        handleInput: (data) => input.handleInput(data),
+      };
+      const modal: Modal = { component, cancel: () => finish() };
+      this.show(modal);
+    });
+  }
+  private detail(
+    title: string,
+    content: () => string,
+    action?: (key: string) => void,
+    hint?: string,
+  ): void {
+    const modal: Modal = {
+      component: new Detail(
+        title,
+        content,
+        () => this.tui.terminal.rows,
+        () => this.dismiss(modal),
+        action,
+        hint,
+      ),
+      cancel: () => this.dismiss(modal),
+    };
+    this.show(modal);
+  }
+  private inspectLatest(): void {
+    const block = this.view.blocks.findLast(
+      (b) => b.kind === "tool" || b.kind === "thinking",
+    );
+    if (!block) {
+      this.notice("No tool output or thinking to inspect yet.");
+      return;
+    }
+    this.detail(block.name ?? "Thinking", () =>
+      block.kind === "thinking"
+        ? block.text
+        : `${blockSummary(block)}\n\n${JSON.stringify(block.args, null, 2)}\n\n${block.text}`,
+    );
+  }
+  private transcriptText(): string {
+    return this.view.blocks
+      .map((block) =>
+        block.kind === "tool"
+          ? `${blockSummary(block)}\n${JSON.stringify(block.args, null, 2)}\n${block.text}`
+          : `${block.kind === "user" ? "You" : block.kind === "thinking" ? "Thinking" : "Assistant"}\n${block.text}`,
+      )
+      .join("\n\n");
+  }
+  private approvals(): void {
+    for (const worker of this.options.workerManager?.active ?? []) {
+      this.options.workerManager?.setWaiting(
+        worker.id,
+        [...this.permissions.pending.values()].some(
+          (p) => p.request.agentId === worker.id,
+        ),
+      );
+    }
+    const pending = this.permissions.pending.values().next().value;
+    if (pending?.request.id === this.approvalId) {
+      this.render();
+      return;
+    }
+    if (this.approvalId) {
+      this.dismiss();
+      this.approvalId = undefined;
+      if (this.suspended) {
+        const modal = this.suspended;
+        this.suspended = undefined;
+        this.show(modal);
+      }
+    }
+    if (!pending || this.closed) {
+      this.render();
+      return;
+    }
+    if (this.modal) {
+      this.suspended = this.modal;
+      this.overlay?.hide();
+    }
+    const { request } = pending;
+    this.approvalId = request.id;
+    // The question is drawn as a box: what the agent wants to do, and what
+    // the user can say about it, in one place.
+    const subject = request.subject ?? request.reason;
+    const approval = new Approval(
+      "Permission required",
+      [
+        request.agentId
+          ? `Worker ${bold(request.agentId)} wants to run ${bold(request.tool)}.`
+          : `The agent wants to run ${bold(request.tool)}.`,
+        ...(request.reason === undefined || request.reason.length === 0
+          ? []
+          : [dim(`Reason: ${safe(request.reason)}`)]),
+        ...(subject === undefined || subject === request.reason
+          ? []
+          : [`  Does: ${cyan(safe(subject))}`]),
+        dim(`  In: ${request.cwd ?? this.options.cwd}`),
+        dim(`  Arguments: ${safe(JSON.stringify(request.args ?? {}))}`),
+        ...(request.outsideWorkspace === true
+          ? [yellow("This is outside the workspace.")]
+          : []),
+      ],
+      [
+        {
+          value: "allow",
+          label: "Allow once",
+          hint: "Run it this time, and ask again next time.",
+        },
+        {
+          value: "allow-always",
+          label: "Allow this exact action for this session",
+          hint: "The same command or edit will not ask again.",
+        },
+        { value: "deny", label: "Deny", hint: "The agent is told it may not." },
+      ],
+      (choice) => {
+        this.permissions.answer(
+          request.id,
+          (choice?.value ?? "deny") as "allow" | "deny" | "allow-always",
+        );
+      },
+      () => this.tui.terminal.rows,
+      "↑↓ move · Enter choose · d details · Esc denies",
+    );
+    const modal: Modal = {
+      component: approval,
+      cancel: () => this.permissions.answer(request.id, "deny"),
+      // The dialog is a box in the middle of the screen, not a sheet over
+      // it: the answer behind it stays readable.
+      width: "72%",
+      minWidth: 44,
+    };
+    approval.onDetails = () => {
+      const detail: Modal = {
+        component: new Detail(
+          "Approval request · full details",
+          () => JSON.stringify(request, null, 2),
+          () => this.tui.terminal.rows,
+          () => this.show(modal),
+        ),
+        cancel: () => this.show(modal),
+      };
+      this.show(detail);
+    };
+    this.show(modal);
+  }
+  private async submit(raw: string): Promise<void> {
+    const text = raw.trim();
+    if (!text || this.closed) return;
+    const slash = parseSlash(text);
+    if (slash) {
+      const safeWhileWorking = [
+        "/exit",
+        "/quit",
+        "/model",
+        "/inspect",
+        "/permissions",
+        "/tasks",
+        "/agents",
+        "/help",
+        "/resume",
+        "/clear",
+        "/new",
+      ];
+      if (this.working && !safeWhileWorking.includes(slash.name)) {
+        this.notice("Wait for the current turn, or press Esc to stop it.");
+        return;
+      }
+      await this.command(slash.name, slash.args);
+      this.render();
+      return;
+    }
+    if (text === "?") {
+      this.help();
+      return;
+    }
+    this.view.pending.push(text);
+    if (!this.working) this.task = this.pump();
+    this.render();
+  }
+  private async pump(): Promise<void> {
+    this.working = true;
+    try {
+      while (this.view.pending.length && !this.closed) {
+        this.turn = new AbortController();
+        await this.flushReports();
+        if (this.stagedModel) {
+          const model = this.stagedModel;
+          this.stagedModel = undefined;
+          await this.useModel(model);
+        }
+        const prompt = this.view.pending.shift()!;
+        if (prompt.startsWith("!")) {
+          const tool =
+            this.options.state.tools.find((t) => t.name === "bash") ??
+            withPermissions([createBashTool()], {
+              mode: this.permissions.mode,
+              controller: this.permissions,
+              workspace: this.options.cwd,
+            })[0]!;
+          const call = {
+            type: "toolCall" as const,
+            id: `shell-${Date.now()}`,
+            name: "bash",
+            args: { command: prompt.slice(1).trim() },
+          };
+          this.view.begin(prompt);
+          this.view.event({ t: "toolStart", call });
+          this.render();
+          const result = await tool.run(call.args, {
+            cwd: this.options.cwd,
+            signal: this.turn.signal,
+          });
+          this.view.event({
+            t: "toolEnd",
+            call,
+            output: result.output,
+            isError: result.isError,
+          });
+        } else {
+          this.view.begin(prompt);
+          this.render();
+          try {
+            for await (const event of run(
+              this.options.state,
+              prompt,
+              this.turn.signal,
+            )) {
+              this.view.event(event);
+              this.render();
+            }
+          } catch (error) {
+            this.notice(error);
+          }
+        }
+        this.view.finish(this.turn.signal.aborted);
+        this.turn = undefined;
+        await this.options.controller?.save();
+        this.render();
+      }
+    } catch (error) {
+      this.notice(error);
+    } finally {
+      this.working = false;
+      this.turn = undefined;
+      this.view.finish();
+      await this.flushReports();
+      this.render();
+    }
+  }
+  private async stopForSwitch(): Promise<boolean> {
+    if (!this.working && !this.options.workerManager?.active.length)
+      return true;
+    const choice = await this.select(
+      "Switch conversation?",
+      [
+        { label: "Keep working", value: "cancel" },
+        { label: "Stop active work and switch", value: "stop" },
+      ],
+      "The current turn and its workers must stop before switching.",
+      false,
+    );
+    if (choice?.value !== "stop") return false;
+    this.view.pending = [];
+    this.turn?.abort();
+    await this.options.workerManager?.stopAll();
+    await this.foreground;
+    await this.task;
+    return true;
+  }
+  private async command(name: string, args: string): Promise<void> {
+    const custom = this.options.commands?.find((c) => c.name === name);
+    if (custom) {
+      await this.submit(renderCommand(custom, args));
+      return;
+    }
+    switch (name) {
+      case "/exit":
+      case "/quit":
+        await this.close();
+        return;
+      case "/help":
+        this.help();
+        return;
+      case "/inspect":
+        this.inspectLatest();
+        return;
+      case "/model":
+        await this.modelsPicker(args);
+        return;
+      case "/permissions":
+        await this.permissionPicker();
+        return;
+      case "/resume":
+        await this.sessions(args);
+        return;
+      case "/new":
+      case "/clear":
+        if (await this.stopForSwitch()) {
+          await this.requireController().create();
+          this.permissions.setMode(
+            this.initialMode === "yolo" ? "ask" : this.initialMode,
+          );
+          this.reload();
+        }
+        return;
+      case "/rename": {
+        const title = args || (await this.prompt("Session name"));
+        if (title?.trim()) {
+          await this.options.store?.updateMetadata({ title: title.trim() });
+          this.notice("Session renamed");
+        }
+        return;
+      }
+      case "/fork":
+        await this.requireController().fork(args || undefined);
+        this.reload();
+        return;
+      case "/tree": {
+        const entries = await this.options.store?.read(
+          this.options.store.id ?? "",
+        );
+        const sessions = await this.options.store?.list();
+        this.detail(
+          "Conversation branches · /fork <entry-id>",
+          () =>
+            (sessions ?? [])
+              .map(
+                (s) =>
+                  `${s.id} ← ${s.parentSessionId ?? "root"}${s.forkEntryId ? ` at ${s.forkEntryId}` : ""} · ${s.title ?? "untitled"}`,
+              )
+              .join("\n") +
+            "\n\nCurrent conversation entries:\n" +
+            (entries ?? [])
+              .map((e) => `${e.id} ← ${e.parent ?? "root"} · ${e.msg.role}`)
+              .join("\n"),
+        );
+        return;
+      }
+      case "/undo": {
+        if (this.permissions.mode === "plan") {
+          this.notice("Plan mode is read-only");
+          return;
+        }
+        const undone = await (
+          this.options.state.checkpoints ?? this.options.checkpoints
+        )?.undo(args || undefined);
+        this.notice(
+          undone
+            ? `Undone ${undone.checkpoint.path}`
+            : "There is nothing to undo",
+        );
+        return;
+      }
+      case "/compact": {
+        this.working = true;
+        this.turn = new AbortController();
+        this.view.activity = "Compacting";
+        try {
+          const compaction = compactMessages({
+            provider: this.options.state.provider,
+            model: this.options.state.model,
+            messages: this.options.state.messages,
+            signal: this.turn.signal,
+          });
+          this.foreground = compaction;
+          const messages = await compaction;
+          if (messages) {
+            for (const [index, msg] of messages.entries())
+              await this.options.state.journal?.append(msg, {
+                compacted: index === 0,
+                model: this.model,
+              });
+            this.options.state.messages = messages;
+            this.reload();
+          }
+        } finally {
+          this.foreground = undefined;
+          this.working = false;
+          this.turn = undefined;
+          this.view.finish();
+          this.render();
+        }
+        return;
+      }
+      case "/login": {
+        const provider = args || (await this.prompt("Provider to sign in to"));
+        if (provider) {
+          const result = await this.options.onLogin?.(provider);
+          if (result && typeof result !== "string" && result.ok) {
+            this.models = [];
+            if (this.model.split("/")[0] === provider)
+              await this.useModel(this.model);
+          }
+          this.notice(
+            typeof result === "string"
+              ? result
+              : (result?.message ?? "Login is unavailable"),
+          );
+        }
+        return;
+      }
+      case "/tasks":
+      case "/subagents":
+        await this.workers();
+        return;
+      case "/agents": {
+        const profile = this.options.agents?.find(
+          (agent) => agent.name === args,
+        );
+        if (profile) {
+          if (this.working) this.stagedModel = profile.model;
+          else await this.useModel(profile.model);
+          return;
+        }
+        const choices = [...(this.options.roles?.values() ?? [])].map(
+          (role) => ({
+            label: `${role.name} · worker role`,
+            value: role.name,
+            description: `${role.description ?? ""} · ${role.model ?? this.model} · tools: ${role.tools?.join(", ") ?? "inherited"}`,
+          }),
+        );
+        choices.push(
+          ...(this.options.agents ?? []).map((agent) => ({
+            label: `${agent.name} · main-agent profile`,
+            value: `profile:${agent.name}`,
+            description: `${agent.description ?? ""} · ${agent.model}`,
+          })),
+        );
+        const choice = await this.select("Agent roles", choices);
+        if (choice) {
+          if (choice.value.startsWith("profile:")) {
+            const selected = this.options.agents?.find(
+              (agent) => `profile:${agent.name}` === choice.value,
+            );
+            if (selected) {
+              if (this.working) this.stagedModel = selected.model;
+              else await this.useModel(selected.model);
+            }
+            return;
+          }
+          const prompt = await this.prompt(`Task for ${choice.label}`);
+          if (prompt)
+            void this.options.workerManager
+              ?.start(choice.value, prompt)
+              .then((record) => this.reportWorker(record))
+              .catch((error) => this.notice(error));
+        }
+        return;
+      }
+      case "/review":
+        await this.review();
+        return;
+      case "/diff": {
+        const snapshot = await reviewSnapshot(
+          this.options.cwd,
+          { kind: "uncommitted" },
+          new AbortController().signal,
+        );
+        this.detail("Working tree diff", () => snapshot.diff || "No changes");
+        return;
+      }
+      default:
+        this.notice(`Unknown command: ${name}. Try /help.`);
+    }
+  }
+  private requireController(): SessionController {
+    if (!this.options.controller)
+      throw new Error("This session has no persistence controller");
+    return this.options.controller;
+  }
+  /**
+   * The commands and the keys.
+   *
+   * The name of a command is in bold and its explanation is dim: the bold
+   * is for the small things — the name and the key — and not for the text
+   * that explains them.
+   */
+  private help(): void {
+    const shortcuts: Array<[string, string]> = [
+      ["Shift+Tab", "Ask → Auto-edit → Plan"],
+      ["Ctrl+O", "Transcript"],
+      ["Alt+I", "Latest tool/thinking"],
+      ["Ctrl+B", "Workers"],
+      ["Ctrl+R", "Prompt history"],
+      ["Shift+Enter / Ctrl+J", "Newline"],
+      ["Esc", "Back / interrupt"],
+      ["@file", "File completion"],
+      ["!command", "Shell (current permissions apply)"],
+    ];
+    const widest = shortcuts.reduce(
+      (most, [key]) => Math.max(most, key.length),
+      0,
+    );
+    this.detail("Commands and shortcuts", () => {
+      const commands = [
+        ...SLASH_COMMANDS,
+        ...(this.options.commands ?? []),
+      ].map((c) => `${bold(c.name)}  ${dim(c.description ?? "")}`);
+      const keys = shortcuts.map(
+        ([key, what]) =>
+          `${bold(key.padEnd(widest))}  ${dim(what)}`,
+      );
+      return [
+        ...commands,
+        "",
+        ...keys,
+        "",
+        dim("Full access is available explicitly in /permissions."),
+      ].join("\n");
+    });
+  }
+  private async modelsPicker(ref: string): Promise<void> {
+    if (ref) {
+      if (this.working) this.stagedModel = ref;
+      else await this.useModel(ref);
+      return;
+    }
+    const choiceFor = (model: AvailableModel): Choice => ({
+      value: model.ref,
+      label: model.name ?? model.id,
+      description: `${model.ref}${model.free ? " · free" : ""}${model.contextWindow ? ` · ${model.contextWindow.toLocaleString()} context` : ""}${model.pricing ? ` · $${model.pricing.input}/$${model.pricing.output} per 1M tokens` : ""}`,
+      // The models of a provider sit under its name, so the list says
+      // where each one comes from.
+      group: PROVIDER_NAMES[model.provider] ?? model.provider,
+      current: model.ref === this.model,
+    });
+    const promise = this.select(
+      "Select Model",
+      this.models.map(choiceFor),
+      "Configured providers · type to search",
+    );
+    const modal = this.modal;
+    const selector = modal?.component as Selector;
+    selector.status = this.models.length
+      ? "Refreshing catalog…"
+      : "Loading models…";
+    this.catalogAbort?.abort();
+    const catalogAbort = new AbortController();
+    this.catalogAbort = catalogAbort;
+    void (
+      this.options.onModels?.(catalogAbort.signal) ?? Promise.resolve([])
+    ).then(
+      (result) => {
+        if (this.closed || (this.modal !== modal && this.suspended !== modal))
+          return;
+        const models = Array.isArray(result) ? result : result.models;
+        const problems = Array.isArray(result) ? [] : (result.problems ?? []);
+        const unavailable = new Set(
+          problems.map((problem) => problem.provider),
+        );
+        if (models.length)
+          this.models = [
+            ...new Map(
+              [
+                ...this.models.filter((model) =>
+                  unavailable.has(model.provider),
+                ),
+                ...models,
+              ].map((model) => [model.ref, model]),
+            ).values(),
+          ];
+        selector.setItems(this.models.map(choiceFor));
+        selector.status = problems.length
+          ? describeProblems(problems)
+          : models.length
+            ? ""
+            : this.models.length
+              ? "Using cached catalog; refresh returned no models"
+              : "No available models. Use /login to configure a provider.";
+        this.render();
+      },
+      (error) => {
+        if (this.closed || catalogAbort.signal.aborted) return;
+        selector.status = `Catalog unavailable${this.models.length ? "; cached models shown" : ""}: ${String(error)}`;
+        this.render();
+      },
+    );
+    const selected = await promise;
+    catalogAbort.abort();
+    if (selected) {
+      if (this.working) this.stagedModel = selected.value;
+      else await this.useModel(selected.value);
+    }
+  }
+  private async useModel(ref: string): Promise<void> {
+    let provider: Provider | undefined;
+    try {
+      provider = this.options.onModel
+        ? await this.options.onModel(ref)
+        : this.options.controller
+          ? await this.options.controller.options.providerFor(ref)
+          : undefined;
+    } catch (error) {
+      this.notice(
+        `Could not use ${ref}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (!provider) {
+      this.notice(`Could not use ${ref}`);
+      return;
+    }
+    const metadata = this.models.find((model) => model.ref === ref);
+    let effort: string | undefined;
+    if (metadata?.supportedEfforts?.length) {
+      const choice = await this.select(
+        "Reasoning effort",
+        [
+          { label: "Provider default", value: "default" },
+          ...metadata.supportedEfforts.map((value) => ({
+            label: value,
+            value,
+          })),
+        ],
+        "Only values advertised by this model are shown.",
+        false,
+      );
+      if (!choice) return;
+      effort = choice.value === "default" ? undefined : choice.value;
+    }
+    if (this.options.controller)
+      await this.options.controller.setModel(ref, provider, effort);
+    else {
+      this.options.state.provider = provider;
+      this.options.state.model = ref.slice(ref.indexOf("/") + 1);
+    }
+    this.options.state.reasoningEffort = effort;
+    const previous = this.model;
+    this.model = ref;
+    if (previous !== ref) {
+      this.view.modelChanged(previous, ref);
+      this.options.controller?.recordModelChange(previous, ref);
+      await this.options.controller?.save();
+    }
+    // The notice says who answers: the name of the provider is the thing
+    // the user needs when an answer does not come from where it should.
+    const expected = ref.slice(0, ref.indexOf("/"));
+    const name = PROVIDER_NAMES[expected];
+    this.notice(
+      `now using ${ref}${name === undefined ? "" : ` · ${name}`}${
+        provider.id === expected ? "" : ` · served by "${provider.id}"`
+      }`,
+    );
+  }
+  private async permissionPicker(): Promise<void> {
+    const choice = await this.select(
+      "Permissions",
+      [
+        {
+          label: "Ask",
+          value: "ask",
+          description: "Read files; ask before edits and commands.",
+        },
+        {
+          label: "Auto-edit",
+          value: "auto-edit",
+          description: "Read and edit workspace files; ask before commands.",
+        },
+        {
+          label: "Plan",
+          value: "plan",
+          description: "Read-only tools; deny edits and execution.",
+        },
+        {
+          label: "Full access",
+          value: "yolo",
+          description:
+            "Skip application approval prompts. Explicit deny rules still apply. This does not change OS sandboxing.",
+        },
+      ].map((item) => ({
+        ...item,
+        current: item.value === this.permissions.mode,
+      })),
+      `Rules: ${this.permissions.config.rules?.map((r) => `${r.tool}(${r.pattern ?? "*"}) ${r.action}`).join("; ") || "none"}`,
+      false,
+    );
+    if (!choice) return;
+    if (choice.value === "yolo") {
+      const confirm = await this.select(
+        "Enable Full access?",
+        [
+          { label: "Keep current permissions", value: "cancel" },
+          { label: "Enable Full access for this session", value: "enable" },
+        ],
+        "Commands and out-of-workspace actions may run without approval.",
+        false,
+      );
+      if (confirm?.value !== "enable") return;
+    }
+    this.permissions.setMode(choice.value as PermissionMode);
+  }
+  private async sessions(id?: string): Promise<void> {
+    const controller = this.requireController();
+    let chosen = id;
+    if (!chosen) {
+      const sessions = await controller.options.store.list();
+      const choice = await this.select(
+        "Resume conversation",
+        sessions.map((s) => ({
+          value: s.id,
+          label: s.title || s.id,
+          description: `${s.updatedAt} · ${s.model} · ${s.entries} messages · ${s.id}`,
+          current: s.id === controller.id,
+        })),
+      );
+      chosen = choice?.value;
+    }
+    if (!chosen || chosen === controller.id || !(await this.stopForSwitch()))
+      return;
+    try {
+      await controller.open(chosen);
+    } catch (error) {
+      this.notice(error);
+      const replacement = await this.select(
+        "Saved model unavailable",
+        [
+          { label: `Use current model: ${this.model}`, value: this.model },
+          { label: "Cancel", value: "cancel" },
+        ],
+        String(error),
+        false,
+      );
+      if (!replacement || replacement.value === "cancel") return;
+      await controller.open(chosen, replacement.value);
+    }
+    this.permissions.setMode(
+      this.initialMode === "yolo" ? "ask" : this.initialMode,
+    );
+    this.reload();
+  }
+  private workerChoices(): Choice[] {
+    return [
+      ...(
+        this.options.workerManager?.records ??
+        this.options.workers ??
+        new Map<string, WorkerRecord>()
+      ).values(),
+    ].map((w) => ({
+      value: w.id,
+      label: `${w.agent} · ${w.status ?? "completed"}`,
+      description: `${w.prompt} · ${w.model ?? ""} · ${w.tokens ?? 0} tokens`,
+    }));
+  }
+  private async workers(): Promise<void> {
+    const manager = this.options.workerManager;
+    const records =
+      manager?.records ??
+      this.options.workers ??
+      new Map<string, WorkerRecord>();
+    const selection = this.select("Workers", this.workerChoices());
+    this.workerSelector = this.modal?.component as Selector;
+    const choice = await selection;
+    this.workerSelector = undefined;
+    if (!choice) return;
+    const worker = records.get(choice.value);
+    if (!worker) return;
+    const show = (): void =>
+      this.detail(
+        `Worker · ${worker.agent} · ${worker.id}`,
+        () => {
+          const view = this.workerViews.get(worker.id);
+          const messages = view
+            ? view.blocks
+                .map((b) => `${b.kind}: ${b.text || blockSummary(b)}`)
+                .join("\n\n")
+            : worker.messages
+                .map((m) =>
+                  m.role === "assistant"
+                    ? m.content
+                        .map((b) => (b.type === "toolCall" ? b.name : b.text))
+                        .join("\n")
+                    : m.content,
+                )
+                .join("\n\n");
+          return `${worker.status ?? "completed"} · ${worker.model ?? ""} · ${worker.tokens ?? 0} tokens\nTask: ${worker.prompt}\n${worker.worktree ? `Worktree: ${worker.worktree.path}\nBranch: ${worker.worktree.branch}` : "Shared workspace"}\n${worker.error ?? ""}\nQueued follow-ups: ${worker.queued?.length ?? 0}\n\n${messages || worker.report}`;
+        },
+        (key) => {
+          if (key === "s") {
+            manager?.stop(worker.id);
+            this.render();
+          }
+          if (key === "f" || key === "r") {
+            this.dismiss();
+            void this.prompt(
+              `${key === "r" ? "Resume" : "Follow up with"} ${worker.agent}`,
+            ).then((prompt) => {
+              if (prompt)
+                void manager
+                  ?.followUp(worker.id, prompt)
+                  .then((record) => this.reportWorker(record))
+                  .catch((error) => this.notice(error));
+              show();
+            });
+          }
+        },
+        "↑↓ scroll · s stop · f follow-up · r resume · Esc main conversation",
+      );
+    show();
+  }
+  private async review(): Promise<void> {
+    const choice = await this.select(
+      "Review changes",
+      [
+        { label: "Uncommitted changes", value: "uncommitted" },
+        { label: "Against a base branch", value: "base" },
+        { label: "A commit", value: "commit" },
+        { label: "Custom instructions (uncommitted changes)", value: "custom" },
+        ...(this.options.controller?.reviews.map((r) => ({
+          label: `${r.status} · ${r.at}`,
+          value: r.id,
+        })) ?? []),
+      ],
+      "Read-only review; findings never apply changes automatically.",
+      false,
+    );
+    if (!choice) return;
+    const previous = this.options.controller?.reviews.find(
+      (r) => r.id === choice.value,
+    );
+    if (previous) {
+      await this.reviewDetail(previous);
+      return;
+    }
+    let target: ReviewTarget = { kind: "uncommitted" };
+    let instructions = "";
+    if (choice.value === "base" || choice.value === "commit") {
+      const ref = await this.prompt(
+        choice.value === "base" ? "Base branch" : "Commit",
+      );
+      if (!ref) return;
+      target = { kind: choice.value, ref };
+    }
+    if (choice.value === "custom") {
+      const value = await this.prompt("Review instructions");
+      if (!value) return;
+      instructions = value;
+    }
+    this.working = true;
+    this.turn = new AbortController();
+    this.view.activity = "Reviewing changes";
+    this.render();
+    try {
+      const execution = executeReview(
+        this.options.state,
+        target,
+        instructions,
+        this.turn.signal,
+        (record) => {
+          const reviews = this.options.controller?.reviews;
+          if (reviews && !reviews.some((r) => r.id === record.id))
+            reviews.push(record);
+          this.options.controller?.scheduleSave();
+          this.render();
+        },
+      );
+      this.foreground = execution;
+      const review = await execution;
+      await this.options.controller?.save();
+      if (!this.closed && !this.turn?.signal.aborted)
+        await this.reviewDetail(review);
+    } finally {
+      this.foreground = undefined;
+      this.working = false;
+      this.turn = undefined;
+      this.view.finish();
+      this.render();
+      if (this.view.pending.length && !this.closed) this.task = this.pump();
+    }
+  }
+  private async reportWorker(record: WorkerRecord): Promise<void> {
+    const key = `${record.id}:${record.runNumber}`;
+    if (this.reported.has(key)) return;
+    this.reported.add(key);
+    this.reports.push({
+      role: "user",
+      content: `Worker ${record.agent} (${record.id}) ${record.status}:\n<worker_report>\n${record.report}\n${record.error ?? ""}\n</worker_report>`,
+    });
+    if (!this.working) await this.flushReports();
+  }
+  private async flushReports(): Promise<void> {
+    for (const msg of this.reports.splice(0)) {
+      this.options.state.messages.push(msg);
+      await this.options.state.journal?.append(msg, { model: this.model });
+    }
+  }
+  private async reviewDetail(review: ReviewRun): Promise<void> {
+    const snapshot = await reviewSnapshot(
+      this.options.cwd,
+      review.target,
+      new AbortController().signal,
+    ).catch(() => undefined);
+    const stale = !snapshot || snapshot.fingerprint !== review.fingerprint;
+    this.detail(
+      `Code review · ${review.status}${stale ? " · STALE" : ""}`,
+      () =>
+        `${review.summary}\n${review.error ?? ""}\n${review.omissions.join("\n")}\n\n${review.findings
+          .map(
+            (f) => `${f.priority} ${f.path}:${f.line} · ${f.title}\n${f.body}`,
+          )
+          .join(
+            "\n\n",
+          )}\n\n${review.status === "completed" && !review.findings.length ? "No findings." : ""}\n\nReviewed diff:\n${review.diff}`,
+      (key) => {
+        if (key === "f" && review.findings.length) {
+          this.dismiss();
+          this.editor.setText(
+            `Fix these review findings:\n${JSON.stringify(review.findings, null, 2)}`,
+          );
+        }
+      },
+      "↑↓ scroll · f draft a fix request · Esc back",
+    );
+  }
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    this.view.pending = [];
+    this.turn?.abort();
+    this.permissions.reset();
+    this.catalogAbort?.abort();
+    this.modal?.cancel();
+    this.suspended?.cancel();
+    if (this.timer) clearInterval(this.timer);
+    for (const cleanup of this.cleanups.splice(0)) cleanup();
+    let code = 0;
+    try {
+      await this.options.workerManager?.stopAll();
+      await this.foreground;
+      await this.task;
+      await this.options.controller?.save();
+    } catch {
+      code = 1;
+    } finally {
+      this.overlay?.hide();
+      this.tui.stop();
+      this.resolveRun?.(code);
+    }
+  }
 }
-
-function contentOf(message: Msg): string {
-  if (message.role === "user" || message.role === "tool") return message.content;
-  return message.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
-}
-
-
-
-
-

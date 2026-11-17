@@ -1,0 +1,83 @@
+These are the tradeoffs visible in the current implementation, with conditions for changing them. They explain the present design; they are not reconstructed historical meeting notes. An alternative can be the better choice for a different workload.
+
+## What are we optimizing for?
+
+<Diagram
+  name="decisions"
+  title="A repeatable decision process, with an explicit review trigger"
+/>
+
+A developer runs one local agent against a repository, chooses a model, sees progress, and retains control over tool execution. The website explains this system without needing a model login. Simplicity of local setup, inspectable state, streaming feedback, and provider flexibility matter more here than serving thousands of simultaneous browser users.
+
+Before changing the architecture, ask: **Who runs the process? Where does private code go? What must survive a crash? What latency is actually painful?** These questions determine the stack more reliably than popularity.
+
+## Why TypeScript and Node?
+
+The provider adapters, runtime, tools, and CLI share message and tool contracts in one language. Async generators express a stream without a separate event broker; AbortSignal gives model requests and tools a common cancellation mechanism. Node provides filesystem, subprocess, streams, and a mature MCP ecosystem.
+
+The costs are a runtime installation for the Node distribution, dependency management, garbage collection, and weaker compile-time guarantees than ownership-based languages. TypeScript types disappear at runtime: tool arguments still need schema validation, and vendor JSON still needs careful parsing.
+
+| Alternative            | Where it can be better                                                                | Cost of choosing it here                                                         | Reconsider when                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Rust + Tokio + Ratatui | Predictable resource use, single binary, strong concurrency and memory guarantees     | More implementation work for provider integrations and UI; separate web language | Profiling shows runtime overhead dominates, or binary size/startup becomes a hard requirement |
+| Go + Bubble Tea        | Straightforward distribution, structured concurrency, approachable terminal ecosystem | Rebuild shared contracts/integrations; browser UI still uses another language    | A small portable binary matters more than sharing TypeScript packages                         |
+| Python + Textual       | Fast experimentation, rich model/data libraries                                       | Packaging and interpreter environments, runtime typing, distribution complexity  | Research workflows and Python integrations dominate interactive coding                        |
+| Bun as primary runtime | Potential startup improvements and executable packaging                               | Native module/platform compatibility must be verified                            | All supported platforms pass the same CLI and terminal tests                                  |
+
+No cross-language performance benchmark has been run. A compiled language is not automatically faster for a turn dominated by remote inference and shell commands.
+
+## Why separate AI, core, tools, and CLI?
+
+Provider protocol changes stay in `ai`; execution policy stays in `tools`; orchestration stays in `core`; terminal state stays in `cli`. A headless consumer can use the same core. This is a modular monolith in one process, with package boundaries rather than network services.
+
+The drawback is interface and build coordination across packages. A single-package application would be easier to navigate initially and is a reasonable alternative for a smaller project. Microservices would add deployments, network errors, authentication, tracing, and distributed cancellation without solving the current local workload. Reconsider a service boundary only when an independently scaled or independently trusted component needs it.
+
+## Why async generators rather than an event bus?
+
+`for await` keeps the consumer's flow explicit and works with cancellation. An event bus or RxJS can be better for many independent subscribers, event composition, or replay. It also adds subscription lifetimes and ordering concerns. The UI currently accumulates its own display store; it does not need a distributed event system.
+
+Decision questions: Do we need multiple consumers at once? Is replay durable or only visual? Who owns backpressure? A slow renderer should coalesce updates rather than create an unbounded queue.
+
+## Why pi-tui rather than Ink or a native TUI?
+
+The current terminal renderer uses pi-tui's differential rendering and input primitives. It can update an existing thinking block or picker instead of appending another transcript line. The core remains independent of its renderer.
+
+Ink would make React composition familiar to web contributors, with its own rendering and terminal behavior to validate. Bubble Tea and Ratatui are strong alternatives when using Go or Rust, but would introduce another implementation language. Raw ANSI offers maximum control at the cost of maintaining cursor movement, wrapping, resize, and cleanup ourselves. Ask whether the actual defect is display state, terminal compatibility, or the renderer before replacing the library.
+
+## Why local files rather than a database?
+
+The current session journal and UI metadata are local. This avoids operating a server and makes sessions inspectable. Atomic replacement protects sidecar updates; it does not turn multiple files into one transaction. Interrupted writes, schema evolution, concurrent writers, and large journals still require care.
+
+SQLite is a credible **better next step** for transactional session/worker metadata, indexed search, and migrations on one machine. It adds a schema and recovery strategy but no network service. Postgres fits a shared multi-user service with authorization, concurrent clients, backups, and centralized retention; those benefits come with ongoing operations and remote-data decisions. Neither database fixes a corrupt provider replay contract.
+
+## Why Next.js and MDX for the website?
+
+The user requested a Next.js app and MDX guides. Static route generation gives directly addressable, searchable documentation; React supports search, provider examples, and source exploration. Shiki highlights on the server. Mermaid loads when a diagram approaches view. MDX keeps prose and selected explanatory components together.
+
+| Alternative                             | Strength                                                 | Tradeoff here                                         | Better decision when                                                          |
+| --------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Astro + Starlight                       | Documentation conventions and selective client hydration | A different framework from the requested Next.js app  | Mostly prose, minimal custom application UI, and an opinionated docs shell    |
+| VitePress                               | Simple Vue-based Markdown docs and navigation            | Switch to Vue for custom components                   | A Vue team maintains a primarily documentation site                           |
+| Docusaurus                              | Established documentation structure and versioning       | More framework conventions and configuration          | Multiple public documentation versions/locales become core requirements       |
+| Plain HTML or static Markdown generator | Small runtime and deployment footprint                   | More manual interactive behavior and content plumbing | The site is a few mostly static pages                                         |
+| Next.js + a docs framework              | Search/navigation/versioning conventions                 | Additional dependency and theme constraints           | Maintaining custom docs infrastructure costs more than customization provides |
+
+Next.js is not intrinsically the fastest or smallest choice for documentation. It satisfies the requested stack and keeps React interactions familiar. If the site stays prose-heavy, Starlight deserves a real prototype comparison.
+
+## Why MDX, Mermaid, and a generated file index?
+
+MDX lets guides embed a diagram or searchable file reference at the relevant paragraph. Mermaid source stays reviewable as `.mmd`; the generated source index is derived from maintained files so folder guides can be refreshed. The cost is a larger build toolchain and potential stale generated content, checked by content tests.
+
+Plain Markdown is easier to move between renderers. Pre-rendered SVG diagrams would remove Mermaid from visitors' JavaScript and can be better for performance; they need a build-time rendering step. Server-backed search scales beyond a small corpus but adds indexing, credentials, availability, and possibly usage cost. Treat MDX as trusted repository code, never as arbitrary visitor input.
+
+## What decisions remain open?
+
+- Would SQLite simplify session recovery enough to justify migration work?
+- Does pre-rendering diagrams reduce browser CPU and transfer enough to justify another build step?
+- At what documentation size should the browser stop receiving the complete search corpus?
+- Which platforms require a native binary rather than a Node installation?
+- Should worker contexts share a retrieval index rather than duplicate large prompts?
+
+Record a decision with: context, constraints, options, selected option, consequences, evidence, and a review trigger. Link implementation files and measurements. Review a choice when its assumptions change, not merely when a new library appears.
+
+Continue with [infrastructure](/docs/infrastructure) and [performance](/docs/performance). Framework capabilities can be checked against the official [Next.js MDX guide](https://nextjs.org/docs/app/guides/mdx), [Astro islands explanation](https://docs.astro.build/en/concepts/islands/), and [SQLite use cases](https://www.sqlite.org/whentouse.html).

@@ -21,6 +21,7 @@ export * from "./agents/roles.js";
 export * from "./agents/board.js";
 export * from "./agents/isolation.js";
 export * from "./agents/task-tool.js";
+export * from "./agents/worker-manager.js";
 export * from "./agents/orchestrator.js";
 export * from "./hooks.js";
 export * from "./commands.js";
@@ -31,7 +32,6 @@ export * from "./untrusted.js";
 export * from "./evals/tasks.js";
 export * from "./evals/runner.js";
 export * from "./ref.js";
-
 
 
 

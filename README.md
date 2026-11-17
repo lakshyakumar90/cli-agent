@@ -9,6 +9,22 @@ that work on their own.
 agent -p "find every place that writes to the database and list them"
 ```
 
+## Website and documentation
+
+The Next.js landing page lives in [`apps/web`](./apps/web/README.md). Run it locally:
+
+```sh
+pnpm --filter @cli-agent/web dev
+```
+
+Open http://localhost:3000 for the landing page and http://localhost:3000/docs for
+installation, provider connectivity, permissions, sessions, workers, and the build
+guide. The MDX docs include downloadable Mermaid diagrams and a searchable source
+file reference. Build with `pnpm --filter @cli-agent/web build`.
+
+Folder READMEs explain their local files. Refresh the generated maps after source
+changes with `node scripts/document-repository.mjs --readmes`.
+
 ## What it does
 
 - **Talk to several providers.** OpenAI, Anthropic, Gemini, Codex (ChatGPT),
@@ -87,8 +103,8 @@ one it picks from the free list that exists today. A key that is free to
 use is a key that works.
 
 `/model` shows only what you can pick: the providers you hold a credential
-for, and for OpenRouter only the free ones. The two CLIs on your machine
-are always in the list, because they need no credential.
+for, and for OpenRouter only the free ones. CLI-backed connections may appear without an agent-owned API key; their own
+sign-in, installed executable, and account access still apply.
 
 **The session opens even without a key.** It says what is missing and waits:
 `/login` signs in, `/model` picks another provider.
@@ -106,13 +122,40 @@ In the interactive session:
 | `/tree` | show the branches of the session |
 | `/undo` | take back the last change |
 | `/agents` | the agents it can delegate to |
+| `/tasks` | live workers, transcripts, stop, follow-up, and resume |
+| `/rename` | give the current session a name |
+| `/review` | review uncommitted changes, a base branch, or a commit |
+| `/diff` | inspect the working tree diff |
 | `/help` | the commands, and where the log is |
 | `?` | the keys |
 | `@` then `Tab` | the files, in a list — the arrows move, `Enter` takes |
 | `!command` | run a shell command |
 | `Esc` | stop the turn |
-| `Shift+Tab` | cycle the permission mode |
-| `Ctrl+T` | fold or unfold the last tool block |
+| `Shift+Tab` | cycle Ask, Auto-edit, and Plan in place |
+| `Alt+I` or `/inspect` | inspect the latest tool or thinking block |
+| `Ctrl+O` | inspect the complete transcript |
+| `Ctrl+B` | open worker controls |
+| `Ctrl+R` | search prompt history |
+| `Shift+Enter` / `Ctrl+J` | insert a newline |
+
+The interactive UI uses pi's differential terminal renderer, with one editor
+and focused selectors. Mode changes and progress update in place. Thinking
+includes a bounded live preview; complete tool results remain available through
+inspection. Full access (`yolo`) is available
+through `/permissions` with explicit confirmation, or through `--mode yolo`.
+It does not disable operating-system restrictions. Permission changes apply
+to the main agent and its workers before their next tool execution.
+
+Sessions are saved continuously. `/resume` switches the active journal and
+restores the model and conversation together; `/clear` creates a new saved
+conversation. Session grants are cleared when switching. Forks retain their
+inherited history after restarting. Workers interrupted by process exit can
+be inspected and resumed from `/tasks`.
+
+`/review` runs with read-only tools and returns prioritized findings; it never
+applies fixes. Its detail view includes the reviewed diff and flags stale or
+incomplete results. Press `f` to draft a separate fix request. Worker detail
+views use `s` to stop, `f` to queue a follow-up, and `r` to resume.
 
 The session opens with a header — the model, the directory, how to change
 the model — and a status line that says how much of the context is left,
@@ -149,18 +192,24 @@ ones it lists:
 agent --model opencode-cli/opencode/big-pickle
 ```
 
+The CLI is asked where its own server listens, and the server is started
+once for the whole session — a server for every turn costs several seconds
+before the model is even asked. The tools of the agent are run by the agent,
+under the same permissions as every other provider, and the CLI is asked not
+to run any of its own.
+
 Neither needs a key of its own: they are already signed in.
 
 ## Letting it work
 
-The agent asks before it changes anything. Four modes:
+Ask mode requests approval for changes and execution. Choose among four modes:
 
 | Mode | What it may do on its own |
 | --- | --- |
-| `ask` | nothing; every change is confirmed |
+| `ask` | reads are allowed; changes and execution ask |
 | `auto-edit` | edits inside the workspace |
-| `yolo` | everything |
-| `plan` | nothing; it only reads and writes the plan |
+| `yolo` | calls are allowed unless an explicit deny rule or OS restriction blocks them |
+| `plan` | read-only tools; no file edits or shell execution |
 
 Rules decide first, whatever the mode is:
 
@@ -202,7 +251,7 @@ merges when it is happy with it. The work of a session is written to a
 board at `.myagent/board.json`, so you can see what is running, who owns
 it and what it found.
 
-The guards: a worker cannot spawn workers, a worker has its own token and
+The guards: delegation depth is bounded, a worker has its own token and
 cost budget and its own timeout, a few workers run at a time, and a failure
 is reported rather than retried in silence.
 
@@ -350,6 +399,7 @@ and the report says which.
 | `packages/core` | the loop, the context, the sessions, the orchestration, the evals |
 | `packages/tools` | the tools, the permissions, the validation, the MCP client |
 | `packages/cli` | the command line and the interactive session |
+| `apps/web` | Next.js landing page and source-backed MDX documentation |
 
 Everything streams; nothing prints from the core. Long operations take an
 `AbortSignal`. The messages are plain JSON.
@@ -384,3 +434,26 @@ The provider adapters are tried against the bytes the vendors actually sent.
 `pnpm --filter @cli-agent/ai record:fixtures` records them again; the
 recordings are in `packages/ai/src/fixtures/`, and the folder says which
 ones are real.
+
+<!-- BEGIN SOURCE INDEX -->
+## Folder guide
+
+### Subfolders
+
+- [apps/](./apps/README.md): Deployable application workspaces. The web app documents the terminal agent without running it in the browser.
+- [packages/](./packages/README.md): Internal TypeScript runtime packages and shared development configuration.
+- [scripts/](./scripts/README.md): Repository maintenance: source documentation generation and commit-by-commit verification.
+
+### Files
+
+| File | Responsibility |
+| --- | --- |
+| [.gitignore](./.gitignore) | Exclude dependencies, generated builds, local secrets, runtime state, and temporary artifacts from version control. |
+| [AGENTS.md](./AGENTS.md) | Repository-specific contributor instructions, including the requirement to read installed Turborepo docs before changing tasks. |
+| [package.json](./package.json) | cli-agent: workspace manifest, build, dev, lint, test, check-types, format, and dependencies. |
+| [pnpm-lock.yaml](./pnpm-lock.yaml) | Resolved workspace dependency versions and integrity metadata for reproducible installs. |
+| [pnpm-workspace.yaml](./pnpm-workspace.yaml) | Declare apps and packages workspace globs and dependency build policies. |
+| [turbo.json](./turbo.json) | Turborepo task dependencies, source inputs, and cache outputs for this scope. |
+
+Regenerate this marked section with `node scripts/document-repository.mjs --readmes` from the repository root. Handwritten content outside the markers is preserved.
+<!-- END SOURCE INDEX -->

@@ -1,0 +1,84 @@
+Configure project-specific behavior in `.myagent/`. Each extension form joins the same tool and permission pipeline.
+
+## MCP servers
+
+Create `.myagent/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    "remote": { "url": "https://example.com/mcp" }
+  }
+}
+```
+
+The local example starts a stdio server. Replace the remote placeholder with a real endpoint. Tools become `server__tool`, for example `files__read_file`, with argument validation and host permissions. MCP support alone does not make a remote service trustworthy.
+
+Connection failures are surfaced so one unavailable server need not prevent the session from loading. Inspect logs without sharing credentials.
+
+## Skills
+
+Place a skill at `.myagent/skills/<name>/SKILL.md`. Discovery includes its name and description. The body loads when requested through the skill tool rather than sending every long instruction on every turn.
+
+## Hooks
+
+Create `.myagent/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "bash", "command": "./scripts/check-command.sh" }
+    ],
+    "PostToolUse": [
+      { "matcher": "write", "command": "./scripts/check-format.sh" }
+    ],
+    "SessionStart": [{ "command": "./scripts/session-note.sh" }]
+  }
+}
+```
+
+Scripts receive JSON on standard input. Nonzero PreToolUse can block a call; PostToolUse output is appended to the result. SessionStart can add context once. These script paths are examples: create the scripts and use commands supported by your platform.
+
+## Slash commands
+
+A file at `.myagent/commands/release.md` defines `/release`:
+
+```markdown
+---
+description: Prepare a release
+argument-hint: <version>
+---
+
+Prepare release $1. Inspect the diff and run relevant checks.
+Do not publish until the user requests it.
+```
+
+`$ARGUMENTS` expands the whole argument string; `$1` to `$9` expand positional arguments. `/help` lists discovered commands.
+
+## TypeScript extensions
+
+Modules in `.myagent/extensions/` export `register`. The API can add tools, providers, and commands:
+
+```typescript
+export function register(api) {
+  api.addTool({
+    name: "hello",
+    description: "Greet a name",
+    schema: api.z.object({ name: api.z.string() }),
+    async run(args) {
+      return { output: `Hello ${args.name}` };
+    },
+  });
+}
+```
+
+This concise example uses the runtime API. Use exported extension types for a typed module. Unknown tools are conservatively treated as effects that may change state. Extensions do not bypass permissions.
+
+## Implementation flow
+
+The CLI session composition loads configuration. `packages/core/src/extensions.ts`, `skills.ts`, `hooks.ts`, and `commands.ts` implement discovery. `packages/tools/src/mcp.ts` translates MCP tools. The [architecture](/docs/architecture) connects these to the loop.

@@ -1,0 +1,72 @@
+Use `agent --help` for the installed build's flags and `/help` for interactive commands, including discovered project commands.
+
+## Startup and output
+
+```bash
+agent
+agent --cwd ./project --mode plan
+agent --model openrouter/your-model
+agent -p "Explain this repository"
+agent --json -p "List entry points"
+agent --rpc
+```
+
+| Flag                         | Purpose                                   |
+| ---------------------------- | ----------------------------------------- |
+| `-p`, `--print`              | Run a prompt and print the answer         |
+| `--json`                     | Emit events as JSON lines                 |
+| `--rpc`                      | Read and write JSON-line requests/events  |
+| `--model`                    | Select a provider/model reference         |
+| `--cwd`                      | Select the working directory              |
+| `--mode`                     | `ask`, `auto-edit`, `plan`, or `yolo`     |
+| `--allow`, `--deny`, `--ask` | Add permission rules                      |
+| `--continue`                 | Continue the last project session         |
+| `--resume [id]`              | Resume a named session or open the picker |
+| `--log`, `--no-log`          | Set or disable session logging            |
+| `-v`, `--verbose`            | Include tool activity where supported     |
+| `-h`, `--help`               | Show usage                                |
+
+## Interactive commands
+
+| Command                | Purpose                                   |
+| ---------------------- | ----------------------------------------- |
+| `/model`               | Search and select models                  |
+| `/permissions`         | Inspect and change access                 |
+| `/login`               | Configure provider authentication         |
+| `/inspect`             | Open latest tool or supplied thinking     |
+| `/compact`             | Summarize older context                   |
+| `/new`, `/clear`       | Start a new saved conversation            |
+| `/resume`, `/rename`   | Open or name a saved session              |
+| `/fork`, `/tree`       | Branch and inspect session ancestry       |
+| `/undo`                | Restore a file checkpoint where available |
+| `/agents`              | Show available delegation roles           |
+| `/tasks`, `/subagents` | Inspect and control workers               |
+| `/review`              | Run read-only review of a captured diff   |
+| `/diff`                | Inspect working-tree changes              |
+| `/help`                | Commands and shortcuts                    |
+
+## Keyboard shortcuts
+
+| Shortcut              | Action                                    |
+| --------------------- | ----------------------------------------- |
+| Esc                   | Back from a dialog; interrupt active work |
+| Shift+Tab             | Cycle Ask, Auto-edit, Plan                |
+| Alt+I                 | Latest thinking/tool detail               |
+| Ctrl+O                | Full display transcript                   |
+| Ctrl+B                | Worker controls                           |
+| Ctrl+R                | Search prompt history                     |
+| Shift+Enter or Ctrl+J | Insert a newline                          |
+| `@` then Tab          | File completion                           |
+| `?`                   | Shortcut help                             |
+
+Ctrl+T is not used for inspection. If your IDE captures Alt+I, use `/inspect`. Focused dialogs own their input; close the dialog before using a main-screen shortcut.
+
+## Shell commands
+
+Prefix an interactive prompt with `!` to request a shell command:
+
+```text
+!git status
+```
+
+The command uses the current tool permission policy. Plan mode does not run shell commands. Use commands supported by the shell on your platform; a Unix command shown in an example is not automatically portable to PowerShell.

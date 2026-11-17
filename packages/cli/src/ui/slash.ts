@@ -9,6 +9,10 @@ import type { PermissionMode } from "@cli-agent/tools";
 
 /** The commands the agent understands. */
 export const SLASH_COMMANDS = [
+  {
+    name: "/inspect",
+    description: "inspect the latest thinking or tool output (Alt+I)",
+  },
   { name: "/model", description: "choose the model" },
   { name: "/permissions", description: "choose what the agent may do" },
   { name: "/login", description: "sign in to a provider" },
@@ -16,9 +20,19 @@ export const SLASH_COMMANDS = [
   { name: "/clear", description: "start a new conversation" },
   { name: "/resume", description: "go back to an earlier conversation" },
   { name: "/agents", description: "the agents it can delegate to" },
-  { name: "/fork", description: "branch the conversation from an earlier message" },
+  {
+    name: "/fork",
+    description: "branch the conversation from an earlier message",
+  },
   { name: "/tree", description: "show the branches of this conversation" },
   { name: "/undo", description: "undo the last change to a file" },
+  { name: "/new", description: "start a new saved conversation" },
+  { name: "/rename", description: "name the current session" },
+  { name: "/tasks", description: "inspect and control live workers" },
+  { name: "/subagents", description: "inspect workers" },
+  { name: "/review", description: "review changes without editing files" },
+  { name: "/diff", description: "inspect the working tree diff" },
+  { name: "/help", description: "commands and keyboard shortcuts" },
 ] as const;
 
 export type SlashName = (typeof SLASH_COMMANDS)[number]["name"];
@@ -67,12 +81,7 @@ export function parseShellEscape(line: string): ShellEscape | undefined {
 }
 
 /** The permission modes, in the order Shift+Tab cycles them. */
-export const PERMISSION_CYCLE: PermissionMode[] = [
-  "ask",
-  "auto-edit",
-  "yolo",
-  "plan",
-];
+export const PERMISSION_CYCLE: PermissionMode[] = ["ask", "auto-edit", "plan"];
 
 /** The next permission mode. */
 export function nextPermissionMode(mode: PermissionMode): PermissionMode {

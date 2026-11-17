@@ -1,0 +1,60 @@
+This website is a separate Next.js App Router workspace at `apps/web`. It serves the landing page at `/` and a statically generated MDX guide at `/docs` and `/docs/<slug>`.
+
+## Stack and page composition
+
+Next.js 16 and React 19 render server-first routes. Local MDX compiles through `@next/mdx` with GitHub-flavored Markdown and stable heading IDs. Shiki highlights code on the server; Mermaid loads in the browser only when a diagram approaches the viewport.
+
+Manrope and IBM Plex Mono are self-hosted through Fontsource packages. Lucide supplies interface icons. The site does not require a font CDN, model connection, database, analytics account, or secret environment variable.
+
+## MDX routing
+
+`lib/docs.ts` lists page metadata and explicit MDX imports. The optional catch-all page in `app/docs/[[...slug]]/page.tsx` uses this registry to generate routes, page titles, breadcrumbs, side navigation, and previous/next links. Unknown paths return the not-found view.
+
+`mdx-components.tsx` maps Markdown elements and custom components. Callout, Diagram, and FileReference can be used directly in a guide:
+
+```mdx
+## Explain the flow
+
+<Callout title="An important boundary">
+  Tools run locally; model requests go to your provider.
+</Callout>
+
+<Diagram name="agent-loop" title="A prompt from input to answer" />
+```
+
+Only checked-in content is compiled. Do not accept untrusted user-authored MDX as executable site content.
+
+## Search and navigation
+
+`lib/content.ts` reads local MDX to build the search corpus and table of contents. Search covers guide titles and body text. The browser uses a native modal dialog for focus containment and Escape behavior; Command+K or Ctrl+K opens it.
+
+Desktop uses grouped navigation and a right-side table of contents. Mobile uses a navigation disclosure and keeps code, tables, and diagrams within their own scrolling containers. Heading anchors are generated with the same slug algorithm used for the contents list.
+
+## Mermaid and source files
+
+Diagrams are real `.mmd` files under `public/diagrams`. A server component reads an allowed diagram name, then passes its text to the client renderer. Rendering uses strict security and a serialized queue because Mermaid owns shared rendering state.
+
+Each diagram has a caption, copy-source button, source disclosure, and download link. Rendering failure leaves readable source. Fenced `mermaid` or `mmd` blocks also work through the shared code-block component.
+
+## Build and verification
+
+```bash
+pnpm --filter @cli-agent/web test
+pnpm --filter @cli-agent/web check-types
+pnpm --filter @cli-agent/web build
+pnpm --filter @cli-agent/web test:e2e
+```
+
+Playwright starts the production server on port 3100 for the browser suite. Install its Chromium browser with `pnpm --filter @cli-agent/web exec playwright install chromium` if needed. For local development, use `pnpm --filter @cli-agent/web dev` on port 3000.
+
+The package-level Turbo configuration caches `.next` output and includes source-package inputs in the cache key. The agent's `dist` build behavior remains separate. When adding files, regenerate the repository index before verifying the content checks.
+
+## Design references
+
+The visual direction uses readable typography, an original terminal preview, and quiet documentation chrome. Research references were [Vibrant's documentation collection](https://vibrant.design/sections/docs) and [official OpenAI Codex CLI documentation](https://learn.chatgpt.com/docs/codex/cli). The implementation follows [Next.js MDX guidance](https://nextjs.org/docs/app/guides/mdx); no source layout or branding is copied.
+
+## Stageshow product demonstration
+
+The redesign uses a vendored subset of [Stageshow](https://github.com/benjitaylor/skills/tree/main/stageshow): its responsive Stage, terminal Window, and their dependencies. The static-card example supplied the composition; Agent's own commands, thinking preview, and permission state supply the content. It is a still demonstration with three user-selected states, not a recording or live model connection. A compact 358px layout changes the spacing and wrapping for phones instead of shrinking desktop text.
+
+The site uses warm paper and forest ink. The real navigation, search dialog, provider controls, and copy actions remain semantic HTML. See `app/redesign.css`, `components/terminal-preview.tsx`, and the attribution in `components/stageshow/NOTICE.md`. Engineering choices and alternatives are documented in [decisions](/docs/decisions), [infrastructure](/docs/infrastructure), and [performance](/docs/performance).

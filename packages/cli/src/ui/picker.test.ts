@@ -48,9 +48,24 @@ const wait = (ms: number): Promise<void> =>
 
 /** The models the picker offers. */
 const models: AvailableModel[] = [
-  { ref: "codex/gpt-6.1-sol", provider: "codex", id: "gpt-6.1-sol", free: false },
-  { ref: "codex/gpt-6.1-terra", provider: "codex", id: "gpt-6.1-terra", free: false },
-  { ref: "openrouter/some/free:free", provider: "openrouter", id: "some/free:free", free: true },
+  {
+    ref: "codex/gpt-6.1-sol",
+    provider: "codex",
+    id: "gpt-6.1-sol",
+    free: false,
+  },
+  {
+    ref: "codex/gpt-6.1-terra",
+    provider: "codex",
+    id: "gpt-6.1-terra",
+    free: false,
+  },
+  {
+    ref: "openrouter/some/free:free",
+    provider: "openrouter",
+    id: "some/free:free",
+    free: true,
+  },
 ];
 
 /** A provider that answers. */
@@ -59,7 +74,11 @@ const provider: Provider = {
   models: async (): Promise<ModelInfo[]> => [],
   async *stream(_request: StreamRequest): AsyncGenerator<Event> {
     yield { t: "text", delta: "ok" };
-    yield { t: "done", usage: { inputTokens: 1, outputTokens: 1 }, stop: "end" };
+    yield {
+      t: "done",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      stop: "end",
+    };
   },
 };
 
@@ -85,25 +104,26 @@ describe("the model picker", () => {
     });
 
     const running = ui.run();
-    input.write("/model\n");
+    input.write("/model\r");
     await wait(300);
 
     const text = stripAnsi(out.text);
 
-    // The list is there, with the models of each provider.
-    expect(text).toContain("codex");
+    // The list is there, with the models of each provider. The models of a
+    // provider sit under its name, so the list says where each one is from.
+    expect(text).toContain("Codex");
     expect(text).toContain("gpt-6.1-sol");
     expect(text).toContain("gpt-6.1-terra");
-    expect(text).toContain("openrouter");
+    expect(text).toContain("OpenRouter");
     expect(text).toContain("some/free:free");
 
     // The one that is on is marked.
-    expect(text).toContain("▶");
+    expect(text).toContain("gpt-6.1-sol");
 
     // Node holds a lone escape back until it knows the sequence is over.
     input.write("\x1b");
     await wait(700);
-    input.write("/exit\n");
+    input.write("/exit\r");
     await running;
   });
 
@@ -134,7 +154,7 @@ describe("the model picker", () => {
     });
 
     const running = ui.run();
-    input.write("/model\n");
+    input.write("/model\r");
     await wait(300);
 
     // Down once, and take it.
@@ -146,7 +166,7 @@ describe("the model picker", () => {
     expect(chosen).toEqual(["codex/gpt-6.1-terra"]);
     expect(stripAnsi(out.text)).toContain("now using");
 
-    input.write("/exit\n");
+    input.write("/exit\r");
     await running;
   });
 
@@ -177,7 +197,7 @@ describe("the model picker", () => {
     });
 
     const running = ui.run();
-    input.write("/model\n");
+    input.write("/model\r");
     await wait(300);
     input.write("\x1b");
     await wait(700);
@@ -185,7 +205,7 @@ describe("the model picker", () => {
     // Nothing was chosen.
     expect(chosen).toEqual([]);
 
-    input.write("/exit\n");
+    input.write("/exit\r");
     await running;
   });
 
@@ -219,7 +239,7 @@ describe("the model picker", () => {
     const text = stripAnsi(out.text);
 
     // The list is there, with the file that matches.
-    expect(text).toContain("pick a file");
+    expect(text).toContain("alpha.ts");
     expect(text).toContain("alpha.ts");
     expect(text).not.toContain("beta.ts");
 
@@ -228,7 +248,7 @@ describe("the model picker", () => {
     // Clear the line the picker left behind, and leave.
     input.write("\x15");
     await wait(100);
-    input.write("/exit\n");
+    input.write("/exit\r");
     await running;
 
     await rm(directory, { recursive: true, force: true });

@@ -1,0 +1,9 @@
+flowchart TD
+  REQUIREMENT[Identify the user and workload] --> CONSTRAINTS[Record privacy, latency, distribution and cost constraints]
+  CONSTRAINTS --> OPTIONS[Compare current stack and alternatives]
+  OPTIONS --> MEASURE[Prototype and measure the actual bottleneck]
+  MEASURE --> CHOOSE[Record decision and consequences]
+  CHOOSE --> VERIFY[Validate correctness and operational cost]
+  VERIFY --> REVIEW{Have the assumptions changed?}
+  REVIEW -->|No| KEEP[Keep the simpler working design]
+  REVIEW -->|Yes| OPTIONS

@@ -1,0 +1,77 @@
+Build the CLI from the repository, then install its local tarball. These steps do not assume the package has been published to npm.
+
+## Requirements
+
+| Requirement     | Used for                                      |
+| --------------- | --------------------------------------------- |
+| Node.js 24+     | Running the CLI and website                   |
+| pnpm 11.25.0    | Installing this workspace                     |
+| Git             | Cloning, diffs, reviews, and worker worktrees |
+| Provider access | API key or supported CLI sign-in              |
+| Bun, optional   | Compiling a standalone executable             |
+
+Confirm your tool versions:
+
+```bash
+node --version
+pnpm --version
+git --version
+```
+
+## Clone and build
+
+```bash
+git clone https://github.com/lakshyakumar90/cli-agent.git
+cd cli-agent
+pnpm install
+pnpm --filter @cli-agent/cli build
+```
+
+The build bundles the TypeScript workspace packages into `packages/cli/dist/cli.js`. Run without a global installation:
+
+```bash
+pnpm --filter @cli-agent/cli start --help
+```
+
+## Install the agent command
+
+From the repository root:
+
+```bash
+cd packages/cli
+npm pack
+npm install -g ./cli-agent-cli-0.1.0.tgz
+agent --help
+```
+
+The tarball name follows `packages/cli/package.json`; change the filename when the version changes. On Windows, npm creates shims in its global bin directory. Open a fresh terminal if that directory was just added to PATH.
+
+## Connect and run
+
+```bash
+agent --cwd /path/to/project
+```
+
+Use `/login`, then `/model` to choose a provider and model. You can also set a provider-specific environment variable before starting. See [connectivity](/docs/providers) for PowerShell and shell examples.
+
+## Optional standalone binary
+
+With Bun installed, run from the repository root:
+
+```bash
+pnpm --filter @cli-agent/cli build:binary
+```
+
+Bun produces a binary for the build machine: `packages/cli/agent` on Unix-like platforms or `packages/cli/agent.exe` on Windows. This is not a cross-platform release bundle. The executable does not need Node, but Git, a shell, and OpenCode are still needed for features that use them.
+
+## Update a source installation
+
+After updating your checkout, install dependencies, rebuild, pack a fresh tarball, and install it globally again. Restart existing Agent processes to load the new code. Preserve local changes when updating.
+
+## Run this website
+
+```bash
+pnpm --filter @cli-agent/web dev
+```
+
+Open `http://localhost:3000`. For production, run `pnpm --filter @cli-agent/web build`, then `pnpm --filter @cli-agent/web start`. The website needs no model credentials.

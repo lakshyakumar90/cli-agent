@@ -1,0 +1,64 @@
+The repository separates model I/O, tool execution, runtime orchestration, terminal presentation, and this website. The index below describes maintained source and configuration files; generated output, dependency trees, local credentials, and Git internals are excluded.
+
+## Folder structure
+
+```text
+cli-agent/
+├── apps/
+│   └── web/                  Next.js landing page and MDX docs
+│       ├── app/              App Router pages, layout, and CSS
+│       ├── components/       Search, previews, code, and diagrams
+│       ├── content/docs/     MDX guides
+│       ├── lib/              Navigation and server content helpers
+│       ├── public/diagrams/  Downloadable Mermaid .mmd sources
+│       ├── scripts/          Content validation
+│       └── tests/            Browser interaction tests
+├── packages/
+│   ├── ai/                   Provider adapters and authentication
+│   │   └── src/
+│   │       ├── auth/         Keys, OAuth, stores, and CLI imports
+│   │       ├── providers/    Wire protocol implementations
+│   │       ├── fixtures/     Recorded streaming bytes
+│   │       └── testing/      Deterministic provider test helpers
+│   ├── core/                 Loop, context, storage, and extensions
+│   │   └── src/
+│   │       ├── agents/       Roles, workers, and worktrees
+│   │       └── evals/        Task suite and runner
+│   ├── tools/                Local tools, validation, and MCP
+│   │   └── src/permissions/  Live policy and enforcement
+│   ├── cli/                  Entrypoint, sessions, and consumers
+│   │   └── src/ui/           Differential terminal interface
+│   ├── eslint-config/        Shared lint presets
+│   └── typescript-config/    Shared compiler presets
+└── scripts/                  Repository documentation and verification
+```
+
+## Where to make a change
+
+| Task                          | Start here                                         |
+| ----------------------------- | -------------------------------------------------- |
+| Add a provider                | `packages/ai/src/providers`, then `factory.ts`     |
+| Change authentication         | `packages/ai/src/auth`                             |
+| Add a tool                    | `packages/tools/src`, then the tool factory        |
+| Change permission policy      | `packages/tools/src/permissions`                   |
+| Change turn execution         | `packages/core/src/loop.ts`                        |
+| Change worker scheduling      | `packages/core/src/agents/worker-manager.ts`       |
+| Change saved session behavior | `packages/core/src/sessions.ts` and CLI controller |
+| Change a terminal interaction | `packages/cli/src/ui/interactive.ts`               |
+| Change a guide                | `apps/web/content/docs`                            |
+| Change website visuals        | `apps/web/app/globals.css` and components          |
+
+## File-by-file reference
+
+Search by path or responsibility, then open a group. Descriptions use explicit mappings, source comments, exported symbols, and test suite names. Links point to the corresponding repository path; new local files become available online after you push them.
+
+<FileReference />
+
+## Keep the map current
+
+```bash
+node scripts/document-repository.mjs
+node scripts/document-repository.mjs --readmes
+```
+
+The first command refreshes the checked-in website index. The second also refreshes marked file-index sections in folder READMEs. Handwritten content outside those markers is preserved. Do not generate documentation inside build output or dependency folders.

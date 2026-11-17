@@ -1,8 +1,9 @@
 /**
  * Live smoke test: stream from every provider you have credentials for.
  *
- * Credentials come from the environment first, then from the CLIs already
- * logged in on this machine:
+ * The credentials come from the environment first, then from the store the
+ * agent keeps (`~/.myagent/auth.json`), then from the CLIs already logged
+ * in on this machine:
  *
  * - codex    — `CODEX_ACCESS_TOKEN` (+ `CODEX_ACCOUNT_ID`), else the Codex
  *              CLI's own login in `~/.codex/auth.json`, imported (and
@@ -21,100 +22,49 @@
  * API keys are read from the environment; nothing is written to the repo.
  */
 
-import { importCodexCliAuth } from "../src/auth/cli-import.js";
-import { AuthStore } from "../src/auth/store.js";
-import { estimateCost } from "../src/models.js";
-import { codex } from "../src/providers/codex.js";
-import { gemini } from "../src/providers/gemini.js";
-import { localOpencode } from "../src/providers/local-opencode.js";
-import { openaiCompat } from "../src/providers/openai-compat.js";
-import { ProviderRegistry } from "../src/registry.js";
+import { createProvider, estimateCost, ProviderRegistry } from "../src/index.js";
 import type { Provider } from "../src/types.js";
 
 // ---------------------------------------------------------------------------
-// Credentials
+// The providers to try
 // ---------------------------------------------------------------------------
 
-interface CodexCredential {
-  accessToken: string;
-  accountId?: string;
-  /** Where it came from, for the report. */
-  source: string;
-  /** True when the access token was renewed with the refresh token. */
-  refreshed: boolean;
+interface Target {
+  id: string;
+  label: string;
+  provider: Provider;
+  credential: string;
+  extra?: string;
 }
 
-async function codexCredential(): Promise<CodexCredential | undefined> {
-  const envToken = process.env.CODEX_ACCESS_TOKEN?.trim();
-  if (envToken !== undefined && envToken.length > 0) {
-    const accountId = process.env.CODEX_ACCOUNT_ID?.trim();
-    return {
-      accessToken: envToken,
-      ...(accountId === undefined ? {} : { accountId }),
-      source: "CODEX_ACCESS_TOKEN",
-      refreshed: false,
-    };
-  }
+/** The providers that need a key, and the one that needs none. */
+const CANDIDATES: Array<{
+  id: string;
+  label: string;
+  env?: string[];
+  /** The provider needs no credential at all. */
+  local?: boolean;
+}> = [
+  { id: "openrouter", label: "openrouter", env: ["OPENROUTER_API_KEY"] },
+  { id: "gemini", label: "gemini", env: ["GEMINI_API_KEY"] },
+  { id: "codex", label: "codex", env: ["CODEX_ACCESS_TOKEN"] },
+  { id: "opencode-cli", label: "opencode (local CLI)", local: true },
+];
 
-  // The Codex CLI's own login. Importing it refreshes the token when it has
-  // expired and writes the rotated token back, so the CLI keeps working.
-  try {
-    const imported = await importCodexCliAuth({ store: new AuthStore() });
-    return {
-      accessToken: imported.access,
-      ...(imported.accountId === undefined ? {} : { accountId: imported.accountId }),
-      source: imported.refreshed
-        ? "~/.codex/auth.json (refreshed)"
-        : "~/.codex/auth.json",
-      refreshed: imported.refreshed,
-    };
-  } catch (error) {
-    console.log(`   (codex: ${describe(error)})`);
-    return undefined;
-  }
-}
-
-interface OpencodeCredential {
-  token: string;
-  server: string;
-  source: string;
-}
-
-async function opencodeCredential(): Promise<OpencodeCredential | undefined> {
-  const envKey = process.env.OPENCODE_API_KEY?.trim();
-  if (envKey !== undefined && envKey.length > 0) {
-    return {
-      token: envKey,
-      server: "https://opencode.ai/zen/v1",
-      source: "OPENCODE_API_KEY",
-    };
-  }
-
-  return undefined;
-}
-
-function envCredential(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value !== undefined && value.length > 0 ? value : undefined;
-}
-
-// ---------------------------------------------------------------------------
-// Model choice
-// ---------------------------------------------------------------------------
-
-/** Preferred models per provider, most wanted first. */
-const PREFERRED: Record<string, string[]> = {
-  gemini: ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.8-flash"],
+/** The models to try, when the provider does not say which it has. */
+const FALLBACK_MODELS: Record<string, string[]> = {
+  openrouter: ["nvidia/nemotron-3.5-lightning:free"],
+  gemini: ["gemini-3.1-flash-lite", "gemini-2.5-flash"],
   codex: ["gpt-6.1-sol", "gpt-6-sol", "gpt-6.1-terra"],
-  openrouter: [],
-  opencode: ["opencode/big-pickle", "opencode/glm-5.3-flash-free"],
+  "opencode-cli": ["opencode/big-pickle", "opencode/beam-free"],
 };
 
 /** Model ids that are not chat models (images, audio, embeddings, agents). */
 const NOT_CHAT = /(-image|-tts|-live|-transcribe|-embedding|-omni|-nano|deep-research|antigravity-preview)/;
 
+/** The models of a provider that are worth trying, best first. */
 function pickModels(provider: string, reported: string[]): string[] {
-  const preferred = PREFERRED[provider] ?? [];
+  const preferred = FALLBACK_MODELS[provider] ?? [];
   const chosen = preferred.filter((model) => reported.includes(model));
   const rest = reported
     .filter((model) => !chosen.includes(model))
@@ -137,86 +87,27 @@ function pickModels(provider: string, reported: string[]): string[] {
 // The run
 // ---------------------------------------------------------------------------
 
-interface Target {
-  id: string;
-  label: string;
-  provider: Provider;
-  credential: string;
-  extra?: string;
-}
-
 const registry = new ProviderRegistry();
 const targets: Target[] = [];
 
-const codexAuth = await codexCredential();
-if (codexAuth !== undefined) {
-  targets.push({
-    id: "codex",
-    label: "codex",
-    provider: codex({
-      id: "codex",
-      accessToken: codexAuth.accessToken,
-      ...(codexAuth.accountId === undefined
-        ? {}
-        : { accountId: codexAuth.accountId }),
-    }),
-    credential: codexAuth.source,
-    ...(codexAuth.accountId === undefined
-      ? {}
-      : { extra: `account ${codexAuth.accountId}` }),
-  });
-}
-
-const opencodeAuth = await opencodeCredential();
-if (opencodeAuth !== undefined) {
-  targets.push({
-    id: "opencode",
-    label: "opencode",
-    provider: openaiCompat({
-      id: "opencode",
-      baseUrl: opencodeAuth.server,
-      apiKey: opencodeAuth.token,
-    }),
-    credential: opencodeAuth.source,
-  });
-} else {
-  // No API key: drive the opencode CLI that is installed and logged in on
-  // this machine. It carries its own session, which the Zen API does not
-  // accept from outside.
-  targets.push({
-    id: "opencode",
-    label: "opencode (local CLI)",
-    provider: localOpencode({ id: "opencode" }),
-    credential: "local opencode CLI",
-  });
-}
-
-const openrouterKey = envCredential("OPENROUTER_API_KEY");
-if (openrouterKey !== undefined) {
-  targets.push({
-    id: "openrouter",
-    label: "openrouter",
-    provider: openaiCompat({
-      id: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      apiKey: openrouterKey,
-      headers: {
-        "HTTP-Referer": "https://github.com/lakshya/cli-agent",
-        "X-Title": "cli-agent",
-      },
-    }),
-    credential: "OPENROUTER_API_KEY",
-  });
-}
-
-const geminiKey = envCredential("GEMINI_API_KEY");
-if (geminiKey !== undefined) {
-  targets.push({
-    id: "gemini",
-    label: "gemini",
-    provider: gemini({ id: "gemini", apiKey: geminiKey }),
-    credential: "GEMINI_API_KEY",
-  });
+for (const candidate of CANDIDATES) {
+  try {
+    const provider = await createProvider(candidate.id);
+    const credential = candidate.local
+      ? "the CLI on this machine"
+      : (candidate.env ?? []).find((name) => process.env[name] !== undefined) ??
+        "the stored credential";
+    targets.push({
+      id: candidate.id,
+      label: candidate.label,
+      provider,
+      credential,
+    });
+  } catch (error) {
+    console.log(`=== ${candidate.label} ===`);
+    console.log(`   skipped: ${describe(error)}`);
+    console.log("");
+  }
 }
 
 if (targets.length === 0) {
@@ -243,12 +134,19 @@ for (const target of targets) {
   try {
     const models = await target.provider.models();
     reported = models.map((model) => model.id);
-    console.log(`   catalog: ${reported.length} model(s)${reported.length > 0 ? ` — e.g. ${reported.slice(0, 3).join(", ")}` : ""}`);
+    console.log(
+      `   catalog: ${reported.length} model(s)${
+        reported.length > 0 ? ` — e.g. ${reported.slice(0, 3).join(", ")}` : ""
+      }`,
+    );
   } catch (error) {
     console.log(`   catalog: unavailable (${describe(error)})`);
   }
 
-  const candidates = pickModels(target.id, reported);
+  const candidates =
+    pickModels(target.id, reported).length > 0
+      ? pickModels(target.id, reported)
+      : (FALLBACK_MODELS[target.id] ?? []);
   if (candidates.length === 0) {
     console.log("   SKIP: no model to try\n");
     failures += 1;
@@ -293,6 +191,8 @@ for (const target of targets) {
       failures += 1;
     }
   }
+  // A provider that owns a process lets it go: nothing outlives the run.
+  await target.provider.close?.().catch(() => undefined);
   console.log("");
 }
 
@@ -346,7 +246,7 @@ async function runStream(
     system: "You are a smoke test. Reply with one short sentence.",
     messages: [{ role: "user", content: "Say hello in one short sentence." }],
     // A stalled provider must not hang the whole run.
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(120_000),
   })) {
     if (event.t === "text") text += event.delta;
     if (event.t === "thinking") thinking += event.delta;
@@ -365,4 +265,3 @@ async function runStream(
     ...(cost === undefined ? {} : { cost }),
   };
 }
-
