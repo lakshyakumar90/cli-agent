@@ -314,6 +314,22 @@ export async function* run(
       await journal(state, result);
     }
 
+    // Every tool of this turn was refused: there is nobody to answer, or
+    // the call is not allowed, and asking the model to try again would only
+    // repeat the question. The turn ends, and the user is told what was
+    // refused.
+    const allRefused =
+      results.length > 0 &&
+      results.every(
+        (result) =>
+          result.isError === true &&
+          /permission denied|refused/i.test(result.content),
+      );
+    if (allRefused) {
+      yield* finish("end");
+      return;
+    }
+
     if (signal.aborted) {
       yield* finish("aborted");
       return;

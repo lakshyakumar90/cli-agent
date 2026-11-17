@@ -8,12 +8,12 @@ The loop speaks one internal event format. Adapters translate vendor streams int
 | `anthropic`    | `ANTHROPIC_API_KEY`                                                |
 | `gemini`       | `GEMINI_API_KEY`                                                   |
 | `openrouter`   | `OPENROUTER_API_KEY`                                               |
-| `opencode`     | Direct Zen API with `OPENCODE_API_KEY`                             |
+| `opencode`     | Direct Zen API with `OPENCODE_API_KEY`, or the local CLI without it |
 | `codex`        | Stored OAuth, `CODEX_ACCESS_TOKEN`, or Codex CLI credential import |
 | `antigravity`  | Stored Google OAuth or `ANTIGRAVITY_ACCESS_TOKEN`                  |
 | `opencode-cli` | Locally installed, connected OpenCode CLI                          |
 
-The prefix identifies the adapter; the remainder identifies the model. The OpenCode CLI has a nested reference such as `opencode-cli/opencode/beam-free`. Direct `opencode` and `opencode-cli` use different transports.
+The prefix identifies the adapter; the remainder identifies the model. The OpenCode CLI has a nested reference such as `opencode-cli/opencode/beam-free`. Direct `opencode` uses the Zen API when `OPENCODE_API_KEY` is set and this same local CLI transport when it is not; `opencode-cli` always uses the local CLI.
 
 ## API keys
 
@@ -52,13 +52,15 @@ Reasoning-effort choices appear only when advertised in the model catalog. Think
   title="OpenCode transport and host-owned tools"
 />
 
-The adapter runs the locally installed OpenCode CLI. A per-turn local plugin clones its built-in agent profile and blocks native execution with an execution hook and replacement executors. Only after both guards are installed does it register a fresh transport agent. If the plugin fails or the installed CLI lacks the required interface, the requested fresh agent does not exist; it cannot fall back to an unguarded built-in agent.
+The adapter runs the locally installed OpenCode CLI through a private server of its own that lives as long as the provider does: `opencode run --standalone` starts a fresh server for every turn and pays its startup before the model is even asked, while one server for the session pays it once. The server is the adapter's — the user's background service and global configuration are never touched — and it is stopped when the provider closes.
 
-The built-in system and request profile remain intact. The former bridge cleared native tool definitions and replaced the system; that produced a free-limit response even when the normal Beam Free CLI command worked. The current guard preserves OpenCode's profile and executes host tools through the validated text protocol instead. It does not forge provider headers, reset quotas, or call the OpenCode inference API from Agent.
+The host agent is defined in the configuration handed to that server, not installed as a plugin. A plugin has to be resolved, activated and registered before the server will answer, and an OpenCode that has not finished activating answers "Location plugins did not finish activating", losing ten seconds or sometimes the whole turn. A configuration agent is there the moment the server is.
 
-The private process loads the plugin without restarting or changing the user's background service. Existing environment config is preserved and augmented. Temporary plugin files are removed after the process completes. The outer loop applies the same permission and schema checks as other providers, and replay retains tool calls and their results.
+The agent has a prompt of its own and no native tool: every native tool of the agent is off, so the tools of the host are run by the host, under the permissions of the host. A model that asks for a tool of the CLI anyway is refused by it, and the call is run by the host instead; a model that writes the call as text is read as text. The user's own configuration is kept and added to — their model, their provider and their plugins still apply — and the host agent is added on top, inheriting the profile of the agent it is named after (`build` by default). It does not forge provider headers, reset quotas, or call the OpenCode inference API from Agent.
 
-This integration was verified against local OpenCode **2.2.5**. Check `opencode --version` in the same shell that launches Agent. On Windows, `Get-Command opencode -All` can reveal multiple npm/pnpm installations. Set `MYAGENT_OPENCODE_COMMAND` to an absolute executable or shim path when PATH selects an older installation. No OpenCode API key is required for this local CLI transport; its existing login and model access apply.
+The outer loop applies the same permission and schema checks as other providers, and replay retains tool calls and their results.
+
+This integration was verified against local OpenCode **2.3.0**. Check `opencode --version` in the same shell that launches Agent. On Windows, `Get-Command opencode -All` can reveal multiple npm/pnpm installations. Set `MYAGENT_OPENCODE_COMMAND` to an absolute executable or shim path when PATH selects an older installation. No OpenCode API key is required for this local CLI transport; its existing login and model access apply.
 
 The adapter assembles complete JSONL lines across stdout chunks, normalizes snapshots by part ID, surfaces JSON errors even on exit zero, and rejects empty responses. It supports cancellation and a two-minute process deadline. A quota failure is an upstream error, not a request to retry forever.
 

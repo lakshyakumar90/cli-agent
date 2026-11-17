@@ -16,7 +16,7 @@ import { codex } from "./providers/codex.js";
 import { gemini } from "./providers/gemini.js";
 import { localOpencode } from "./providers/local-opencode.js";
 import { openaiCompat } from "./providers/openai-compat.js";
-import type { Event, Provider } from "./types.js";
+import type { Event, ModelInfo, Provider, StreamRequest } from "./types.js";
 
 export interface ProviderFactoryOptions {
   /** The environment to read credentials from. Defaults to `process.env`. */
@@ -66,7 +66,6 @@ export async function createProvider(
 
   switch (id) {
     case "openai":
-    case "opencode":
     case "openrouter": {
       const { token } = await auth.get(id);
       return openaiCompat({
@@ -83,6 +82,24 @@ export async function createProvider(
           : {}),
         ...(fetch === undefined ? {} : { fetch }),
       });
+    }
+
+    case "opencode": {
+      // A key of the user's own talks to Zen directly.
+      const keyed = await tryToken(auth, id);
+      if (keyed !== undefined) {
+        return openaiCompat({
+          id,
+          baseUrl: PROVIDER_BASE_URLS.opencode as string,
+          apiKey: keyed,
+          ...(fetch === undefined ? {} : { fetch }),
+        });
+      }
+      // Without one, Zen is the wrong door: it refuses a free model to an
+      // API request however it is authenticated — "Free models work in
+      // OpenCode". The CLI on this machine carries the session Zen does
+      // serve, so the ref runs through it.
+      return opencodeViaCli();
     }
 
     case "anthropic": {
@@ -117,7 +134,7 @@ export async function createProvider(
 
     case "opencode-cli":
       // The opencode CLI that is installed and logged in on this machine.
-      return localOpencode({ id: "opencode-cli" });
+      return opencodeCli();
 
     default:
       throw new ProviderError(
@@ -128,6 +145,74 @@ export async function createProvider(
         ].join(", ")}`,
         { provider: id, code: "protocol" },
       );
+  }
+}
+
+/**
+ * The bridge to the opencode CLI, made once for the process.
+ *
+ * `opencode` and `opencode-cli` are two names for the same program: two
+ * providers would start two private servers, and one server for the whole
+ * session is what keeps the first answer quick.
+ */
+let cliBridge: Provider | undefined;
+
+function opencodeCli(): Provider {
+  return (cliBridge ??= localOpencode({ id: "opencode-cli" }));
+}
+
+/**
+ * The `opencode` provider, served by the CLI.
+ *
+ * The CLI names its models "opencode/<model>". The ref the user picked
+ * already carried the provider, so the model id is the part after it: the
+ * prefix goes back on only when the CLI is asked, and comes off the list
+ * the CLI gives back.
+ */
+export function opencodeViaCli(bridge: Provider = opencodeCli()): Provider {
+  const prefix = "opencode";
+  return {
+    id: prefix,
+    warm: () => bridge.warm?.(),
+    close: async () => {
+      await bridge.close?.();
+    },
+    async models(signal?: AbortSignal): Promise<ModelInfo[]> {
+      const listed = await bridge.models(signal);
+      return listed
+        .filter((model) => model.id.startsWith(`${prefix}/`))
+        .map((model) => ({
+          ...model,
+          id: model.id.slice(prefix.length + 1),
+          provider: prefix,
+        }));
+    },
+    stream: (request: StreamRequest) =>
+      bridge.stream({
+        ...request,
+        model: request.model.startsWith(`${prefix}/`)
+          ? request.model
+          : `${prefix}/${request.model}`,
+      }),
+  };
+}
+
+/**
+ * The API key of a provider, when the user holds one.
+ *
+ * A missing or unusable credential is not thrown: the caller has another
+ * way in. Anything that is not about credentials is a real failure and is
+ * left alone.
+ */
+async function tryToken(
+  auth: AuthManager,
+  provider: string,
+): Promise<string | undefined> {
+  try {
+    return (await auth.get(provider)).token;
+  } catch (error) {
+    if (error instanceof AuthError) return undefined;
+    throw error;
   }
 }
 

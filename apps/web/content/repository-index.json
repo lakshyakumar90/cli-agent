@@ -417,7 +417,7 @@
   },
   {
     "path": "packages/ai/src/factory.test.ts",
-    "description": "Regression tests for the provider factory."
+    "description": "Regression tests for the provider factory, the opencode provider."
   },
   {
     "path": "packages/ai/src/factory.ts",
@@ -957,7 +957,7 @@
   },
   {
     "path": "packages/core/src/loop.guards.test.ts",
-    "description": "Regression tests for loop guards, abort, retry."
+    "description": "Regression tests for loop guards, every call refused, abort."
   },
   {
     "path": "packages/core/src/loop.order.test.ts",

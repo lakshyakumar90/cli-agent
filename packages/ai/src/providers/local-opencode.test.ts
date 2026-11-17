@@ -56,6 +56,11 @@ function turn() {
       console.error("something went wrong");
       process.exit(1);
     }
+    if (args.includes("signed-out")) {
+      // The way the real CLI says it has no login for the model asked for.
+      console.error('auth: no credentials for "opencode"');
+      process.exit(1);
+    }
     if (args.includes("no-server")) {
       // The private server could not be started: the turn must fall back to
       // a server of its own, and it must say so.
@@ -592,6 +597,22 @@ describe("local opencode", () => {
     expect(error).toBeInstanceOf(ProviderError);
     expect(error).toMatchObject({ provider: "opencode", code: "protocol" });
     expect((error as Error).message).toContain("something went wrong");
+  });
+
+  it("says how to sign in when the CLI has no login for the model", async () => {
+    const error = await collect(
+      provider({ args: [script, "signed-out"] }).stream({
+        model: "opencode/iceman-free",
+        system: "",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ProviderError);
+    // "no credentials" on its own leaves the user guessing what to run.
+    expect((error as Error).message).toContain("opencode auth login");
   });
 
   it("stops when the caller aborts", async () => {

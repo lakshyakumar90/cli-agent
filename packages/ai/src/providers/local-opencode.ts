@@ -347,6 +347,11 @@ function saysMissingProgram(text: string): boolean {
   );
 }
 
+/** Does this failure say the CLI has no login for the model asked for? */
+function saysSignedOut(text: string): boolean {
+  return text.includes("no credentials for");
+}
+
 /** Kill the CLI and everything it started. */
 function killTree(child: ChildProcess): void {
   if (process.platform === "win32" && child.pid !== undefined) {
@@ -836,10 +841,13 @@ export function localOpencode(options: LocalOpencodeOptions = {}): Provider {
         const detail = stderrDetail(stderr);
         // A program that is not there says so on its error stream, and the
         // advice that fits is different from the advice for a program that
-        // is there and did not answer.
+        // is there and did not answer. A CLI with no login for the model
+        // says so too, and the sign-in is the answer.
         const advice = saysMissingProgram(detail)
           ? ` ${missingCommandAdvice()}`
-          : "";
+          : saysSignedOut(detail)
+            ? " Run `opencode auth login` to sign in."
+            : "";
         failure = new ProviderError(
           `opencode: exited with code ${code}${detail.length > 0 ? ` — ${detail}` : ""}${advice}`,
           { provider: id, code: "protocol", body: stderr.slice(0, 2000) },

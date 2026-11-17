@@ -260,6 +260,98 @@ describe("loop guards", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Every call of a turn refused
+// ---------------------------------------------------------------------------
+
+/** A tool behind a permission layer that refuses everything. */
+function refusingTool(): Tool {
+  return {
+    name: "refused",
+    description: "Always denied.",
+    schema: z.object({}),
+    async run() {
+      return {
+        output: "permission denied: there is nobody to ask",
+        isError: true,
+      };
+    },
+  };
+}
+
+describe("every call refused", () => {
+  it("ends the run instead of asking the model again", async () => {
+    const provider = scriptedProvider([
+      { calls: [{ id: "call-1", name: "refused", args: {} }] },
+      { text: "never reached" },
+    ]);
+    const state = stateWith(provider, [refusingTool()]);
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // The model is not asked again: one request, then the run ends.
+    expect(provider.requests).toHaveLength(1);
+    expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
+    // The refusal is what the user sees.
+    expect(events.find((event) => event.t === "toolEnd")).toMatchObject({
+      isError: true,
+      output: expect.stringContaining("permission denied"),
+    });
+    expect(state.messages.at(-1)).toMatchObject({
+      role: "tool",
+      isError: true,
+      content: expect.stringContaining("permission denied"),
+    });
+  });
+
+  it("carries on when one call of the turn ran", async () => {
+    const provider = scriptedProvider([
+      {
+        calls: [
+          { id: "call-1", name: "refused", args: {} },
+          { id: "call-2", name: "echo", args: { text: "hi" } },
+        ],
+      },
+      { text: "done" },
+    ]);
+    const state = stateWith(provider, [refusingTool(), echoTool()]);
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // Not every call was refused, so the model gets another turn.
+    expect(provider.requests).toHaveLength(2);
+    expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
+  });
+
+  it("carries on when the failure was not a refusal", async () => {
+    const broken: Tool = {
+      name: "broken",
+      description: "Fails for another reason.",
+      schema: z.object({}),
+      async run() {
+        throw new Error("file not found");
+      },
+    };
+    const provider = scriptedProvider([
+      { calls: [{ id: "call-1", name: "broken", args: {} }] },
+      { text: "done" },
+    ]);
+    const state = stateWith(provider, [broken]);
+
+    const events = await collect(
+      run(state, "go", new AbortController().signal),
+    );
+
+    // A failure the model can work around is still worth another turn.
+    expect(provider.requests).toHaveLength(2);
+    expect(events.at(-1)).toMatchObject({ t: "done", reason: "end" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Abort
 // ---------------------------------------------------------------------------
 
